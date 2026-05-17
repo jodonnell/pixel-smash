@@ -3,11 +3,19 @@ export type Vector2 = {
   y: number
 }
 
+export type PixelColor = "red" | "green" | "blue"
+
+export type ShipPixel = {
+  gridX: number
+  gridY: number
+  color: PixelColor
+}
+
 export type Ship = {
   position: Vector2
   velocity: Vector2
-  angle: number
-  radius: number
+  rotation: number
+  pixels: ShipPixel[]
 }
 
 export type GameState = {

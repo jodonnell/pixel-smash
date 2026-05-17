@@ -1,5 +1,14 @@
 import type { GameState, Ship } from "./types"
 
+const pixelSize = 18
+const pixelGap = 2
+
+const pixelColors = {
+  red: "#f05252",
+  green: "#44c76b",
+  blue: "#4b8dff",
+} as const
+
 export class Renderer {
   constructor(private readonly context: CanvasRenderingContext2D) {}
 
@@ -15,22 +24,24 @@ export class Renderer {
 
   private drawShip(ship: Ship): void {
     const { context } = this
-    const noseDistance = ship.radius
-    const rearDistance = ship.radius * 0.72
-    const halfWidth = ship.radius * 0.62
 
     context.save()
     context.translate(ship.position.x, ship.position.y)
-    context.rotate(ship.angle)
-    context.beginPath()
-    context.moveTo(noseDistance, 0)
-    context.lineTo(-rearDistance, -halfWidth)
-    context.lineTo(-rearDistance * 0.62, 0)
-    context.lineTo(-rearDistance, halfWidth)
-    context.closePath()
-    context.strokeStyle = "white"
-    context.lineWidth = 2
-    context.stroke()
+    context.rotate(ship.rotation)
+
+    for (const pixel of ship.pixels) {
+      const x = pixel.gridX * pixelSize - pixelSize / 2
+      const y = pixel.gridY * pixelSize - pixelSize / 2
+
+      context.fillStyle = pixelColors[pixel.color]
+      context.fillRect(
+        x + pixelGap / 2,
+        y + pixelGap / 2,
+        pixelSize - pixelGap,
+        pixelSize - pixelGap,
+      )
+    }
+
     context.restore()
   }
 }

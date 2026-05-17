@@ -6,6 +6,16 @@ const reverseAcceleration = 220
 const drag = 0.995
 const maxSpeed = 520
 
+const createPlayerPixels = () => [
+  { gridX: 0, gridY: 0, color: "green" },
+  { gridX: 1, gridY: 0, color: "red" },
+  { gridX: -1, gridY: 0, color: "blue" },
+  { gridX: 0, gridY: -1, color: "blue" },
+  { gridX: 0, gridY: 1, color: "red" },
+  { gridX: -1, gridY: -1, color: "green" },
+  { gridX: -1, gridY: 1, color: "green" },
+] as const
+
 export class Game {
   readonly state: GameState
 
@@ -22,8 +32,8 @@ export class Game {
           x: 0,
           y: 0,
         },
-        angle: -Math.PI / 2,
-        radius: 18,
+        rotation: -Math.PI / 2,
+        pixels: [...createPlayerPixels()],
       },
     }
   }
@@ -32,15 +42,15 @@ export class Game {
     const ship = this.state.ship
 
     if (input.rotateLeft) {
-      ship.angle -= rotationSpeed * deltaSeconds
+      ship.rotation -= rotationSpeed * deltaSeconds
     }
 
     if (input.rotateRight) {
-      ship.angle += rotationSpeed * deltaSeconds
+      ship.rotation += rotationSpeed * deltaSeconds
     }
 
-    const forwardX = Math.cos(ship.angle)
-    const forwardY = Math.sin(ship.angle)
+    const forwardX = Math.cos(ship.rotation)
+    const forwardY = Math.sin(ship.rotation)
 
     if (input.thrust) {
       ship.velocity.x += forwardX * thrustAcceleration * deltaSeconds
