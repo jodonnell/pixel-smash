@@ -29,6 +29,12 @@ export type PixelHighlight = {
   remainingSeconds: number
 }
 
+export type ScreenShake = {
+  remainingSeconds: number
+  durationSeconds: number
+  magnitude: number
+}
+
 export type Ship = {
   position: Vector2
   velocity: Vector2
@@ -48,6 +54,7 @@ export type GameState = {
   ship: Ship
   enemies: EnemyShip[]
   pixelHighlights: PixelHighlight[]
+  screenShake: ScreenShake
 }
 
 export type InputState = {

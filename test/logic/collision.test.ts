@@ -104,6 +104,44 @@ describe("ramming damage", () => {
     expect(game.state.ship.pixels).toHaveLength(1)
     expect(game.state.enemies[0].pixels).toHaveLength(1)
   })
+
+  it("knocks ships apart, starts shake, and cools down repeated damage", () => {
+    const game = new Game(960, 540)
+    game.toggleMode()
+    game.state.ship.velocity = { x: 260, y: 0 }
+    game.state.enemies = [
+      createEnemy([
+        { gridX: 0, gridY: 0, color: "green" },
+        { gridX: 1, gridY: 0, color: "red" },
+        { gridX: -1, gridY: 0, color: "red" },
+        { gridX: 0, gridY: -1, color: "blue" },
+        { gridX: 0, gridY: 1, color: "blue" },
+      ]),
+    ]
+
+    game.update(noInput, 0)
+
+    expect(game.state.ship.velocity.x).toBeLessThan(260)
+    expect(game.state.enemies[0].velocity.x).toBeGreaterThan(0)
+    expect(
+      detectPixelCollisions(
+        game.state.ship,
+        game.state.enemies[0],
+        18,
+      ),
+    ).toHaveLength(0)
+    expect(game.state.screenShake.remainingSeconds).toBeGreaterThan(0)
+
+    const playerPixelCount = game.state.ship.pixels.length
+    const enemyPixelCount = game.state.enemies[0].pixels.length
+
+    game.state.ship.position = { x: 480, y: 270 }
+    game.state.enemies[0].position = { x: 480, y: 270 }
+    game.update(noInput, 0)
+
+    expect(game.state.ship.pixels).toHaveLength(playerPixelCount)
+    expect(game.state.enemies[0].pixels).toHaveLength(enemyPixelCount)
+  })
 })
 
 describe("impact-localized damage", () => {

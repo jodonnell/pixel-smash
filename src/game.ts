@@ -23,6 +23,13 @@ const enemyMinSpin = 0.25
 const enemyMaxSpin = 0.7
 const collisionHighlightDuration = 0.2
 const minimumDamageImpactSpeed = 50
+const collisionCooldownSeconds = 0.3
+const collisionSeparationPadding = 1.5
+const collisionKnockbackScale = 0.7
+const minimumCollisionImpulse = 45
+const maxCollisionImpulse = 360
+const screenShakeDuration = 0.18
+const maxScreenShakeMagnitude = 10
 
 type RemovalCandidate = {
   pixel: ShipPixel
@@ -254,7 +261,7 @@ const createEnemyShip = (
 export class Game {
   readonly state: GameState
   private readonly activeCollisionKeys = new Set<string>()
-  private readonly activeCollisionEnemies = new Set<number>()
+  private readonly collisionCooldowns = new Map<number, number>()
 
   constructor(width: number, height: number) {
     this.state = {
@@ -278,6 +285,11 @@ export class Game {
         createEnemyShip(width, height, index),
       ),
       pixelHighlights: [],
+      screenShake: {
+        remainingSeconds: 0,
+        durationSeconds: screenShakeDuration,
+        magnitude: 0,
+      },
     }
   }
 
@@ -292,10 +304,13 @@ export class Game {
       ship.rotation = 0
       this.state.pixelHighlights = []
       this.activeCollisionKeys.clear()
-      this.activeCollisionEnemies.clear()
+      this.collisionCooldowns.clear()
+      this.stopScreenShake()
       return
     }
 
+    this.updateCollisionCooldowns(deltaSeconds)
+    this.updateScreenShake(deltaSeconds)
     this.updateEnemies(deltaSeconds)
 
     if (input.rotateLeft) {
@@ -343,7 +358,8 @@ export class Game {
       ship.rotation = 0
       this.state.pixelHighlights = []
       this.activeCollisionKeys.clear()
-      this.activeCollisionEnemies.clear()
+      this.collisionCooldowns.clear()
+      this.stopScreenShake()
     }
   }
 
@@ -423,6 +439,30 @@ export class Game {
     }
   }
 
+  private updateCollisionCooldowns(deltaSeconds: number): void {
+    for (const [enemyIndex, remainingSeconds] of this.collisionCooldowns) {
+      const nextRemainingSeconds = remainingSeconds - deltaSeconds
+
+      if (nextRemainingSeconds <= 0) {
+        this.collisionCooldowns.delete(enemyIndex)
+        continue
+      }
+
+      this.collisionCooldowns.set(enemyIndex, nextRemainingSeconds)
+    }
+  }
+
+  private updateScreenShake(deltaSeconds: number): void {
+    this.state.screenShake.remainingSeconds = Math.max(
+      0,
+      this.state.screenShake.remainingSeconds - deltaSeconds,
+    )
+
+    if (this.state.screenShake.remainingSeconds === 0) {
+      this.state.screenShake.magnitude = 0
+    }
+  }
+
   private updatePixelCollisions(deltaSeconds: number): void {
     this.state.pixelHighlights = this.state.pixelHighlights
       .map((highlight) => ({
@@ -432,7 +472,6 @@ export class Game {
       .filter((highlight) => highlight.remainingSeconds > 0)
 
     const nextCollisionKeys = new Set<string>()
-    const nextCollisionEnemies = new Set<number>()
 
     this.state.enemies.forEach((enemy, enemyIndex) => {
       const collisions = detectPixelCollisions(
@@ -440,10 +479,6 @@ export class Game {
         enemy,
         buildGridCellSize,
       )
-
-      if (collisions.length > 0) {
-        nextCollisionEnemies.add(enemyIndex)
-      }
 
       for (const collision of collisions) {
         const key = this.getCollisionKey(enemyIndex, collision)
@@ -455,11 +490,17 @@ export class Game {
         }
       }
 
-      if (
-        collisions.length > 0 &&
-        !this.activeCollisionEnemies.has(enemyIndex)
-      ) {
-        this.applyRammingDamage(enemy, enemyIndex, collisions)
+      if (collisions.length > 0) {
+        this.separateShips(enemy, collisions)
+
+        if (!this.collisionCooldowns.has(enemyIndex)) {
+          const didDamage = this.applyRammingCollision(enemy, enemyIndex, collisions)
+          this.collisionCooldowns.set(enemyIndex, collisionCooldownSeconds)
+
+          if (didDamage) {
+            this.startScreenShake(enemy, collisions)
+          }
+        }
       }
     })
 
@@ -467,27 +508,25 @@ export class Game {
     for (const key of nextCollisionKeys) {
       this.activeCollisionKeys.add(key)
     }
-
-    this.activeCollisionEnemies.clear()
-    for (const enemyIndex of nextCollisionEnemies) {
-      this.activeCollisionEnemies.add(enemyIndex)
-    }
   }
 
-  private applyRammingDamage(
+  private applyRammingCollision(
     enemy: EnemyShip,
     enemyIndex: number,
     collisions: PixelCollision[],
-  ): void {
+  ): boolean {
     const relativeVelocity = {
       x: this.state.ship.velocity.x - enemy.velocity.x,
       y: this.state.ship.velocity.y - enemy.velocity.y,
     }
     const impactSpeed = Math.hypot(relativeVelocity.x, relativeVelocity.y)
+
+    this.applyCollisionKnockback(enemy, collisions, relativeVelocity, impactSpeed)
+
     const enemyDamage = this.getImpactDamageCount(impactSpeed)
 
     if (enemyDamage === 0) {
-      return
+      return false
     }
 
     const playerDamage = Math.max(1, Math.ceil(enemyDamage * 0.5))
@@ -513,6 +552,141 @@ export class Game {
 
     this.highlightDestroyedPixels("player", undefined, destroyedPlayerPixels)
     this.highlightDestroyedPixels("enemy", enemyIndex, destroyedEnemyPixels)
+    return destroyedPlayerPixels.length > 0 || destroyedEnemyPixels.length > 0
+  }
+
+  private separateShips(enemy: EnemyShip, collisions: PixelCollision[]): void {
+    let currentCollisions = collisions
+
+    for (let attempts = 0; attempts < 4; attempts += 1) {
+      if (currentCollisions.length === 0) {
+        return
+      }
+
+      const normal = this.getCollisionNormal(enemy, currentCollisions)
+      const maxPenetration = currentCollisions.reduce(
+        (largestPenetration, collision) =>
+          Math.max(largestPenetration, buildGridCellSize - collision.distance),
+        0,
+      )
+      const separationDistance = maxPenetration + collisionSeparationPadding
+      const halfSeparationDistance = separationDistance / 2
+
+      this.state.ship.position.x -= normal.x * halfSeparationDistance
+      this.state.ship.position.y -= normal.y * halfSeparationDistance
+      enemy.position.x += normal.x * halfSeparationDistance
+      enemy.position.y += normal.y * halfSeparationDistance
+
+      currentCollisions = detectPixelCollisions(
+        this.state.ship,
+        enemy,
+        buildGridCellSize,
+      )
+    }
+  }
+
+  private applyCollisionKnockback(
+    enemy: EnemyShip,
+    collisions: PixelCollision[],
+    relativeVelocity: { x: number; y: number },
+    impactSpeed: number,
+  ): void {
+    const normal = this.getCollisionNormal(enemy, collisions)
+    const normalVelocity = relativeVelocity.x * normal.x + relativeVelocity.y * normal.y
+    const impactNormal =
+      normalVelocity < 0
+        ? {
+            x: -normal.x,
+            y: -normal.y,
+          }
+        : normal
+    const directionalImpactSpeed = Math.max(
+      0,
+      relativeVelocity.x * impactNormal.x + relativeVelocity.y * impactNormal.y,
+    )
+    const impulse = Math.min(
+      maxCollisionImpulse,
+      Math.max(minimumCollisionImpulse, directionalImpactSpeed || impactSpeed * 0.35) *
+        collisionKnockbackScale,
+    )
+
+    this.state.ship.velocity.x -= impactNormal.x * impulse
+    this.state.ship.velocity.y -= impactNormal.y * impulse
+    enemy.velocity.x += impactNormal.x * impulse
+    enemy.velocity.y += impactNormal.y * impulse
+  }
+
+  private getCollisionNormal(
+    enemy: EnemyShip,
+    collisions: PixelCollision[],
+  ): { x: number; y: number } {
+    const summedNormal = collisions.reduce(
+      (normal, collision) => ({
+        x: normal.x + collision.shipBCenter.x - collision.shipACenter.x,
+        y: normal.y + collision.shipBCenter.y - collision.shipACenter.y,
+      }),
+      { x: 0, y: 0 },
+    )
+
+    return this.normalizeVector(summedNormal, () =>
+      this.normalizeVector(
+        {
+          x: enemy.position.x - this.state.ship.position.x,
+          y: enemy.position.y - this.state.ship.position.y,
+        },
+        () =>
+          this.normalizeVector(
+            {
+              x: this.state.ship.velocity.x - enemy.velocity.x,
+              y: this.state.ship.velocity.y - enemy.velocity.y,
+            },
+            () => ({ x: 1, y: 0 }),
+          ),
+      ),
+    )
+  }
+
+  private normalizeVector(
+    vector: { x: number; y: number },
+    getFallback: () => { x: number; y: number },
+  ): { x: number; y: number } {
+    const length = Math.hypot(vector.x, vector.y)
+
+    if (length > 0.0001) {
+      return {
+        x: vector.x / length,
+        y: vector.y / length,
+      }
+    }
+
+    return getFallback()
+  }
+
+  private startScreenShake(
+    enemy: EnemyShip,
+    collisions: PixelCollision[],
+  ): void {
+    const relativeVelocity = {
+      x: this.state.ship.velocity.x - enemy.velocity.x,
+      y: this.state.ship.velocity.y - enemy.velocity.y,
+    }
+    const impactSpeed = Math.hypot(relativeVelocity.x, relativeVelocity.y)
+
+    this.state.screenShake.remainingSeconds = screenShakeDuration
+    this.state.screenShake.durationSeconds = screenShakeDuration
+    this.state.screenShake.magnitude = Math.min(
+      maxScreenShakeMagnitude,
+      3 + (impactSpeed / maxSpeed) * maxScreenShakeMagnitude,
+    )
+
+    if (collisions.length === 0) {
+      this.state.screenShake.magnitude = 0
+    }
+  }
+
+  private stopScreenShake(): void {
+    this.state.screenShake.remainingSeconds = 0
+    this.state.screenShake.magnitude = 0
   }
 
   private getImpactDamageCount(impactSpeed: number): number {

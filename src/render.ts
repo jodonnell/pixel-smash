@@ -16,6 +16,9 @@ export class Renderer {
   render(state: GameState): void {
     this.clear(state.width, state.height)
 
+    this.context.save()
+    this.applyScreenShake(state)
+
     if (state.mode === "build") {
       this.drawBuildGrid(state.width, state.height)
     }
@@ -38,11 +41,26 @@ export class Renderer {
     }
 
     this.drawStatus(state)
+    this.context.restore()
   }
 
   private clear(width: number, height: number): void {
     this.context.fillStyle = "black"
     this.context.fillRect(0, 0, width, height)
+  }
+
+  private applyScreenShake(state: GameState): void {
+    if (state.screenShake.remainingSeconds <= 0 || state.screenShake.magnitude <= 0) {
+      return
+    }
+
+    const progress =
+      state.screenShake.remainingSeconds / state.screenShake.durationSeconds
+    const magnitude = state.screenShake.magnitude * progress * progress
+    const offsetX = (Math.random() * 2 - 1) * magnitude
+    const offsetY = (Math.random() * 2 - 1) * magnitude
+
+    this.context.translate(offsetX, offsetY)
   }
 
   private drawBuildGrid(width: number, height: number): void {
