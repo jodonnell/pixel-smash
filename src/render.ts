@@ -21,6 +21,13 @@ export class Renderer {
     }
 
     this.drawShip(state.ship)
+
+    if (state.mode === "game") {
+      for (const enemy of state.enemies) {
+        this.drawShip(enemy)
+      }
+    }
+
     this.drawStatus(state)
   }
 

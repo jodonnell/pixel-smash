@@ -3,7 +3,14 @@ import {
   canRemovePixel,
   getPixelAt,
 } from "./shipConnectivity"
-import type { GameState, InputState, PixelColor } from "./types"
+import type {
+  EnemyShip,
+  GameState,
+  InputState,
+  PixelColor,
+  Ship,
+  ShipPixel,
+} from "./types"
 
 const rotationSpeed = Math.PI * 2.2
 const thrustAcceleration = 360
@@ -11,6 +18,11 @@ const reverseAcceleration = 220
 const drag = 0.995
 const maxSpeed = 520
 export const buildGridCellSize = 18
+const enemyCount = 3
+const enemyMinSpeed = 25
+const enemyMaxSpeed = 70
+const enemyMinSpin = 0.25
+const enemyMaxSpin = 0.7
 
 const createPlayerPixels = () => [
   { gridX: 0, gridY: 0, color: "green" },
@@ -21,6 +33,57 @@ const createPlayerPixels = () => [
   { gridX: -1, gridY: -1, color: "green" },
   { gridX: -1, gridY: 1, color: "green" },
 ] as const
+
+const enemyPixelShapes: readonly (readonly ShipPixel[])[] = [
+  [
+    { gridX: 0, gridY: 0, color: "green" },
+    { gridX: 1, gridY: 0, color: "red" },
+    { gridX: -1, gridY: 0, color: "red" },
+    { gridX: 0, gridY: -1, color: "blue" },
+    { gridX: 0, gridY: 1, color: "blue" },
+  ],
+  [
+    { gridX: 0, gridY: 0, color: "blue" },
+    { gridX: 1, gridY: 0, color: "green" },
+    { gridX: 0, gridY: 1, color: "green" },
+    { gridX: -1, gridY: 1, color: "red" },
+    { gridX: 1, gridY: -1, color: "red" },
+  ],
+  [
+    { gridX: 0, gridY: 0, color: "red" },
+    { gridX: -1, gridY: 0, color: "blue" },
+    { gridX: -2, gridY: 0, color: "green" },
+    { gridX: 0, gridY: -1, color: "green" },
+    { gridX: 0, gridY: 1, color: "blue" },
+    { gridX: 1, gridY: 0, color: "red" },
+  ],
+]
+
+const randomBetween = (min: number, max: number): number =>
+  min + Math.random() * (max - min)
+
+const createEnemyShip = (width: number, height: number, index: number): EnemyShip => {
+  const driftDirection = randomBetween(0, Math.PI * 2)
+  const driftSpeed = randomBetween(enemyMinSpeed, enemyMaxSpeed)
+  const spinDirection = Math.random() < 0.5 ? -1 : 1
+
+  return {
+    position: {
+      x: randomBetween(buildGridCellSize * 3, width - buildGridCellSize * 3),
+      y: randomBetween(buildGridCellSize * 3, height - buildGridCellSize * 3),
+    },
+    velocity: {
+      x: Math.cos(driftDirection) * driftSpeed,
+      y: Math.sin(driftDirection) * driftSpeed,
+    },
+    rotation: randomBetween(0, Math.PI * 2),
+    angularVelocity:
+      spinDirection * randomBetween(enemyMinSpin, enemyMaxSpin),
+    pixels: enemyPixelShapes[index % enemyPixelShapes.length].map((pixel) => ({
+      ...pixel,
+    })),
+  }
+}
 
 export class Game {
   readonly state: GameState
@@ -43,6 +106,9 @@ export class Game {
         rotation: -Math.PI / 2,
         pixels: [...createPlayerPixels()],
       },
+      enemies: Array.from({ length: enemyCount }, (_, index) =>
+        createEnemyShip(width, height, index),
+      ),
     }
   }
 
@@ -57,6 +123,8 @@ export class Game {
       ship.rotation = 0
       return
     }
+
+    this.updateEnemies(deltaSeconds)
 
     if (input.rotateLeft) {
       ship.rotation -= rotationSpeed * deltaSeconds
@@ -86,7 +154,7 @@ export class Game {
     ship.position.x += ship.velocity.x * deltaSeconds
     ship.position.y += ship.velocity.y * deltaSeconds
 
-    this.wrapShip()
+    this.wrapShip(ship)
   }
 
   toggleMode(): void {
@@ -167,8 +235,17 @@ export class Game {
     velocity.y *= scale
   }
 
-  private wrapShip(): void {
-    const { width, height, ship } = this.state
+  private updateEnemies(deltaSeconds: number): void {
+    for (const enemy of this.state.enemies) {
+      enemy.position.x += enemy.velocity.x * deltaSeconds
+      enemy.position.y += enemy.velocity.y * deltaSeconds
+      enemy.rotation += enemy.angularVelocity * deltaSeconds
+      this.wrapShip(enemy)
+    }
+  }
+
+  private wrapShip(ship: Ship): void {
+    const { width, height } = this.state
 
     if (ship.position.x < 0) {
       ship.position.x += width

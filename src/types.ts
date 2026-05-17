@@ -20,12 +20,17 @@ export type Ship = {
   pixels: ShipPixel[]
 }
 
+export type EnemyShip = Ship & {
+  angularVelocity: number
+}
+
 export type GameState = {
   width: number
   height: number
   mode: GameMode
   selectedPixelColor: PixelColor
   ship: Ship
+  enemies: EnemyShip[]
 }
 
 export type InputState = {
