@@ -149,39 +149,62 @@ export class Renderer {
       state.selectedPixelColor[0].toUpperCase() +
       state.selectedPixelColor.slice(1)
     const modeLabel = state.mode === "build" ? "Build Mode" : "Game Mode"
+    const undefeatedEnemyCount = state.enemies.filter(
+      (enemy) => enemy.pixels.length > 1,
+    ).length
 
     context.save()
     context.fillStyle = "#e5e7eb"
     context.font = "16px OpenSans, system-ui, sans-serif"
     context.textBaseline = "top"
-    context.fillText(`${modeLabel} | Tab`, 18, 16)
+    context.fillText(`${modeLabel} | Tab switch mode | R restart`, 18, 16)
 
     if (state.mode === "build") {
-      context.fillText(`Color: ${colorLabel} | 1 Red  2 Green  3 Blue`, 18, 40)
       context.fillText(
-        "Click place/recolor | Right click or shift-click remove",
+        `Build: click place/recolor connected pixels | Right/shift-click remove | Color: ${colorLabel}`,
         18,
-        64,
+        40,
+      )
+      context.fillText("1 Red  2 Green  3 Blue", 18, 64)
+    } else {
+      context.fillText(
+        "Controls: arrows rotate/thrust/reverse | Ram enemy ships",
+        18,
+        40,
       )
     }
 
     const statsX = state.width - 210
     context.textAlign = "left"
+    context.fillText(`Ship pixels: ${state.ship.pixels.length}`, statsX, 16)
+    context.fillText(`Enemies: ${undefeatedEnemyCount}`, statsX, 40)
     context.fillText(
       `Thrust: ${Math.round(state.ship.stats.thrustPower)}`,
       statsX,
-      16,
+      64,
     )
     context.fillText(
       `Resistance: ${Math.round(state.ship.stats.damageResistance * 100)}%`,
       statsX,
-      40,
+      88,
     )
     context.fillText(
       `Ramming: ${state.ship.stats.rammingPower.toFixed(1)}x`,
       statsX,
-      64,
+      112,
     )
+
+    if (state.outcome !== "playing") {
+      const message =
+        state.outcome === "won"
+          ? "You win! Press R to restart."
+          : "Ship destroyed. Press R to restart."
+
+      context.textAlign = "center"
+      context.font = "30px OpenSans, system-ui, sans-serif"
+      context.fillStyle = state.outcome === "won" ? "#86efac" : "#fca5a5"
+      context.fillText(message, state.width / 2, 82)
+    }
 
     context.restore()
   }

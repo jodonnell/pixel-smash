@@ -7,6 +7,8 @@ export type PixelColor = "red" | "green" | "blue"
 
 export type GameMode = "build" | "game"
 
+export type GameOutcome = "playing" | "won" | "lost"
+
 export type ShipPixel = {
   gridX: number
   gridY: number
@@ -57,6 +59,7 @@ export type GameState = {
   width: number
   height: number
   mode: GameMode
+  outcome: GameOutcome
   selectedPixelColor: PixelColor
   ship: Ship
   enemies: EnemyShip[]

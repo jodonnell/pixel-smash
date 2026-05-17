@@ -271,17 +271,28 @@ const createEnemyShip = (
 }
 
 export class Game {
-  readonly state: GameState
+  state: GameState
   private readonly activeCollisionKeys = new Set<string>()
   private readonly collisionCooldowns = new Map<number, number>()
 
   constructor(width: number, height: number) {
+    this.state = this.createInitialState(width, height)
+  }
+
+  restart(): void {
+    this.state = this.createInitialState(this.state.width, this.state.height)
+    this.activeCollisionKeys.clear()
+    this.collisionCooldowns.clear()
+  }
+
+  private createInitialState(width: number, height: number): GameState {
     const playerPixels = [...createPlayerPixels()]
 
-    this.state = {
+    return {
       width,
       height,
       mode: "build",
+      outcome: "playing",
       selectedPixelColor: "red",
       ship: {
         position: {
@@ -311,6 +322,11 @@ export class Game {
   update(input: InputState, deltaSeconds: number): void {
     const ship = this.state.ship
     this.recalculateAllShipStats()
+
+    if (this.state.outcome !== "playing") {
+      this.updateScreenShake(deltaSeconds)
+      return
+    }
 
     if (this.state.mode === "build") {
       ship.position.x = this.state.width / 2
@@ -359,9 +375,14 @@ export class Game {
 
     this.wrapShip(ship)
     this.updatePixelCollisions(deltaSeconds)
+    this.updateOutcome()
   }
 
   toggleMode(): void {
+    if (this.state.outcome !== "playing") {
+      return
+    }
+
     this.state.mode = this.state.mode === "build" ? "game" : "build"
 
     if (this.state.mode === "build") {
@@ -380,6 +401,10 @@ export class Game {
   }
 
   setSelectedPixelColor(color: PixelColor): void {
+    if (this.state.outcome !== "playing") {
+      return
+    }
+
     this.state.selectedPixelColor = color
   }
 
@@ -530,6 +555,21 @@ export class Game {
     this.activeCollisionKeys.clear()
     for (const key of nextCollisionKeys) {
       this.activeCollisionKeys.add(key)
+    }
+  }
+
+  private updateOutcome(): void {
+    if (this.state.ship.pixels.length <= 1) {
+      this.state.outcome = "lost"
+      return
+    }
+
+    const undefeatedEnemies = this.state.enemies.filter(
+      (enemy) => enemy.pixels.length > 1,
+    )
+
+    if (this.state.enemies.length > 0 && undefeatedEnemies.length === 0) {
+      this.state.outcome = "won"
     }
   }
 

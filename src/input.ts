@@ -6,6 +6,8 @@ const trackedKeys = new Set([
   "ArrowUp",
   "ArrowDown",
   "Tab",
+  "r",
+  "R",
   "1",
   "2",
   "3",
@@ -17,6 +19,7 @@ export class KeyboardInput {
   constructor(
     private readonly onToggleMode: () => void,
     private readonly onSelectPixelColor: (color: PixelColor) => void,
+    private readonly onRestart: () => void,
   ) {
     window.addEventListener("keydown", this.handleKeyDown)
     window.addEventListener("keyup", this.handleKeyUp)
@@ -46,6 +49,14 @@ export class KeyboardInput {
     if (event.key === "Tab") {
       if (!event.repeat) {
         this.onToggleMode()
+      }
+
+      return
+    }
+
+    if (event.key.toLowerCase() === "r") {
+      if (!event.repeat) {
+        this.onRestart()
       }
 
       return

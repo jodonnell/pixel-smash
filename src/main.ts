@@ -25,6 +25,7 @@ const game = new Game(canvasWidth, canvasHeight)
 const input = new KeyboardInput(
   () => game.toggleMode(),
   (color) => game.setSelectedPixelColor(color),
+  () => game.restart(),
 )
 const renderer = new Renderer(context)
 

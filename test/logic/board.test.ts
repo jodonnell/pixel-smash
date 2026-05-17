@@ -101,4 +101,49 @@ describe("build mode ship editing", () => {
       lowEngineGame.state.ship.velocity.x,
     )
   })
+
+  it("loses when the player ship is reduced to one pixel", () => {
+    const game = new Game(960, 540)
+    game.state.ship.pixels = [{ gridX: 0, gridY: 0, color: "green" }]
+    game.toggleMode()
+
+    game.update(
+      { rotateLeft: false, rotateRight: false, thrust: false, reverse: false },
+      0,
+    )
+
+    expect(game.state.outcome).toBe("lost")
+  })
+
+  it("wins when every enemy has one or fewer pixels", () => {
+    const game = new Game(960, 540)
+    game.state.enemies[0].pixels = [{ gridX: 0, gridY: 0, color: "red" }]
+    game.state.enemies[1].pixels = []
+    game.state.enemies[2].pixels = [{ gridX: 0, gridY: 0, color: "blue" }]
+    game.toggleMode()
+
+    game.update(
+      { rotateLeft: false, rotateRight: false, thrust: false, reverse: false },
+      0,
+    )
+
+    expect(game.state.outcome).toBe("won")
+  })
+
+  it("restarts back to a fresh build-mode game", () => {
+    const game = new Game(960, 540)
+    game.state.ship.pixels = [{ gridX: 0, gridY: 0, color: "green" }]
+    game.toggleMode()
+    game.update(
+      { rotateLeft: false, rotateRight: false, thrust: false, reverse: false },
+      0,
+    )
+
+    game.restart()
+
+    expect(game.state.mode).toBe("build")
+    expect(game.state.outcome).toBe("playing")
+    expect(game.state.ship.pixels).toHaveLength(7)
+    expect(game.state.enemies).toHaveLength(3)
+  })
 })
