@@ -21,9 +21,45 @@ if (context === null) {
   throw new Error("Canvas 2D rendering is not supported.")
 }
 
-const input = new KeyboardInput()
 const game = new Game(canvasWidth, canvasHeight)
+const input = new KeyboardInput(
+  () => game.toggleMode(),
+  (color) => game.setSelectedPixelColor(color),
+)
 const renderer = new Renderer(context)
+
+const getCanvasPoint = (event: MouseEvent): { x: number; y: number } => {
+  const bounds = canvas.getBoundingClientRect()
+
+  return {
+    x: ((event.clientX - bounds.left) / bounds.width) * canvas.width,
+    y: ((event.clientY - bounds.top) / bounds.height) * canvas.height,
+  }
+}
+
+const handleBuildPointer = (event: MouseEvent): void => {
+  if (game.state.mode !== "build") {
+    return
+  }
+
+  event.preventDefault()
+
+  const point = getCanvasPoint(event)
+  const gridPoint = game.screenToBuildGrid(point.x, point.y)
+
+  if (event.button === 2 || event.shiftKey) {
+    game.tryRemovePixel(gridPoint.x, gridPoint.y)
+  } else if (event.button === 0) {
+    game.tryPlacePixel(gridPoint.x, gridPoint.y)
+  }
+}
+
+canvas.addEventListener("mousedown", handleBuildPointer)
+canvas.addEventListener("contextmenu", (event) => {
+  if (game.state.mode === "build") {
+    event.preventDefault()
+  }
+})
 
 let previousTimestamp = performance.now()
 

@@ -5,6 +5,8 @@ export type Vector2 = {
 
 export type PixelColor = "red" | "green" | "blue"
 
+export type GameMode = "build" | "game"
+
 export type ShipPixel = {
   gridX: number
   gridY: number
@@ -21,6 +23,8 @@ export type Ship = {
 export type GameState = {
   width: number
   height: number
+  mode: GameMode
+  selectedPixelColor: PixelColor
   ship: Ship
 }
 
