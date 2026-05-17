@@ -1,9 +1,5 @@
-import {
-  canPlacePixel,
-  canRemovePixel,
-  getPixelAt,
-} from "./shipConnectivity"
-import { detectPixelCollisions } from "./collision"
+import { canPlacePixel, canRemovePixel, getPixelAt } from "./shipConnectivity"
+import { detectPixelCollisions, getPixelWorldCenter } from "./collision"
 import type {
   EnemyShip,
   GameState,
@@ -26,16 +22,18 @@ const enemyMaxSpeed = 70
 const enemyMinSpin = 0.25
 const enemyMaxSpin = 0.7
 const collisionHighlightDuration = 0.2
+const minimumDamageImpactSpeed = 50
 
-const createPlayerPixels = () => [
-  { gridX: 0, gridY: 0, color: "green" },
-  { gridX: 1, gridY: 0, color: "red" },
-  { gridX: -1, gridY: 0, color: "blue" },
-  { gridX: 0, gridY: -1, color: "blue" },
-  { gridX: 0, gridY: 1, color: "red" },
-  { gridX: -1, gridY: -1, color: "green" },
-  { gridX: -1, gridY: 1, color: "green" },
-] as const
+const createPlayerPixels = () =>
+  [
+    { gridX: 0, gridY: 0, color: "green" },
+    { gridX: 1, gridY: 0, color: "red" },
+    { gridX: -1, gridY: 0, color: "blue" },
+    { gridX: 0, gridY: -1, color: "blue" },
+    { gridX: 0, gridY: 1, color: "red" },
+    { gridX: -1, gridY: -1, color: "green" },
+    { gridX: -1, gridY: 1, color: "green" },
+  ] as const
 
 const enemyPixelShapes: readonly (readonly ShipPixel[])[] = [
   [
@@ -65,7 +63,11 @@ const enemyPixelShapes: readonly (readonly ShipPixel[])[] = [
 const randomBetween = (min: number, max: number): number =>
   min + Math.random() * (max - min)
 
-const createEnemyShip = (width: number, height: number, index: number): EnemyShip => {
+const createEnemyShip = (
+  width: number,
+  height: number,
+  index: number,
+): EnemyShip => {
   const driftDirection = randomBetween(0, Math.PI * 2)
   const driftSpeed = randomBetween(enemyMinSpeed, enemyMaxSpeed)
   const spinDirection = Math.random() < 0.5 ? -1 : 1
@@ -80,8 +82,7 @@ const createEnemyShip = (width: number, height: number, index: number): EnemyShi
       y: Math.sin(driftDirection) * driftSpeed,
     },
     rotation: randomBetween(0, Math.PI * 2),
-    angularVelocity:
-      spinDirection * randomBetween(enemyMinSpin, enemyMaxSpin),
+    angularVelocity: spinDirection * randomBetween(enemyMinSpin, enemyMaxSpin),
     pixels: enemyPixelShapes[index % enemyPixelShapes.length].map((pixel) => ({
       ...pixel,
     })),
@@ -91,6 +92,7 @@ const createEnemyShip = (width: number, height: number, index: number): EnemyShi
 export class Game {
   readonly state: GameState
   private readonly activeCollisionKeys = new Set<string>()
+  private readonly activeCollisionEnemies = new Set<number>()
 
   constructor(width: number, height: number) {
     this.state = {
@@ -128,6 +130,7 @@ export class Game {
       ship.rotation = 0
       this.state.pixelHighlights = []
       this.activeCollisionKeys.clear()
+      this.activeCollisionEnemies.clear()
       return
     }
 
@@ -178,6 +181,7 @@ export class Game {
       ship.rotation = 0
       this.state.pixelHighlights = []
       this.activeCollisionKeys.clear()
+      this.activeCollisionEnemies.clear()
     }
   }
 
@@ -225,7 +229,10 @@ export class Game {
     return true
   }
 
-  screenToBuildGrid(screenX: number, screenY: number): { x: number; y: number } {
+  screenToBuildGrid(
+    screenX: number,
+    screenY: number,
+  ): { x: number; y: number } {
     return {
       x: Math.round((screenX - this.state.width / 2) / buildGridCellSize),
       y: Math.round((screenY - this.state.height / 2) / buildGridCellSize),
@@ -263,6 +270,7 @@ export class Game {
       .filter((highlight) => highlight.remainingSeconds > 0)
 
     const nextCollisionKeys = new Set<string>()
+    const nextCollisionEnemies = new Set<number>()
 
     this.state.enemies.forEach((enemy, enemyIndex) => {
       const collisions = detectPixelCollisions(
@@ -270,6 +278,10 @@ export class Game {
         enemy,
         buildGridCellSize,
       )
+
+      if (collisions.length > 0) {
+        nextCollisionEnemies.add(enemyIndex)
+      }
 
       for (const collision of collisions) {
         const key = this.getCollisionKey(enemyIndex, collision)
@@ -280,11 +292,161 @@ export class Game {
           this.logCollision(enemyIndex, collision)
         }
       }
+
+      if (
+        collisions.length > 0 &&
+        !this.activeCollisionEnemies.has(enemyIndex)
+      ) {
+        this.applyRammingDamage(enemy, enemyIndex, collisions)
+      }
     })
 
     this.activeCollisionKeys.clear()
     for (const key of nextCollisionKeys) {
       this.activeCollisionKeys.add(key)
+    }
+
+    this.activeCollisionEnemies.clear()
+    for (const enemyIndex of nextCollisionEnemies) {
+      this.activeCollisionEnemies.add(enemyIndex)
+    }
+  }
+
+  private applyRammingDamage(
+    enemy: EnemyShip,
+    enemyIndex: number,
+    collisions: PixelCollision[],
+  ): void {
+    const relativeVelocity = {
+      x: this.state.ship.velocity.x - enemy.velocity.x,
+      y: this.state.ship.velocity.y - enemy.velocity.y,
+    }
+    const impactSpeed = Math.hypot(relativeVelocity.x, relativeVelocity.y)
+    const enemyDamage = this.getImpactDamageCount(impactSpeed)
+
+    if (enemyDamage === 0) {
+      return
+    }
+
+    const playerDamage = Math.max(1, Math.ceil(enemyDamage * 0.5))
+    const playerImpactCenter = this.getAverageCollisionCenter(
+      collisions.map((collision) => collision.shipACenter),
+    )
+    const enemyImpactCenter = this.getAverageCollisionCenter(
+      collisions.map((collision) => collision.shipBCenter),
+    )
+
+    const destroyedPlayerPixels = this.destroyPixelsNearWorldPoint(
+      this.state.ship,
+      playerImpactCenter,
+      playerDamage,
+    )
+    const destroyedEnemyPixels = this.destroyPixelsNearWorldPoint(
+      enemy,
+      enemyImpactCenter,
+      enemyDamage,
+    )
+
+    this.highlightDestroyedPixels("player", undefined, destroyedPlayerPixels)
+    this.highlightDestroyedPixels("enemy", enemyIndex, destroyedEnemyPixels)
+  }
+
+  private getImpactDamageCount(impactSpeed: number): number {
+    if (impactSpeed < minimumDamageImpactSpeed) {
+      return 0
+    }
+
+    if (impactSpeed < 150) {
+      return 1
+    }
+
+    if (impactSpeed < 300) {
+      return 2 + Math.floor(((impactSpeed - 150) / 150) * 3)
+    }
+
+    return 5 + Math.floor((impactSpeed - 300) / 120)
+  }
+
+  private getAverageCollisionCenter(
+    points: readonly { x: number; y: number }[],
+  ): {
+    x: number
+    y: number
+  } {
+    const total = points.reduce(
+      (sum, point) => ({
+        x: sum.x + point.x,
+        y: sum.y + point.y,
+      }),
+      { x: 0, y: 0 },
+    )
+
+    return {
+      x: total.x / points.length,
+      y: total.y / points.length,
+    }
+  }
+
+  private destroyPixelsNearWorldPoint(
+    ship: Ship,
+    worldPoint: { x: number; y: number },
+    requestedDamage: number,
+  ): ShipPixel[] {
+    const removableCount = Math.min(requestedDamage, ship.pixels.length - 1)
+
+    if (removableCount <= 0) {
+      return []
+    }
+
+    const pixelsToDestroy = [...ship.pixels]
+      .sort((pixelA, pixelB) => {
+        const pixelACenter = getPixelWorldCenter(
+          ship,
+          pixelA,
+          buildGridCellSize,
+        )
+        const pixelBCenter = getPixelWorldCenter(
+          ship,
+          pixelB,
+          buildGridCellSize,
+        )
+        const pixelADistance = Math.hypot(
+          pixelACenter.x - worldPoint.x,
+          pixelACenter.y - worldPoint.y,
+        )
+        const pixelBDistance = Math.hypot(
+          pixelBCenter.x - worldPoint.x,
+          pixelBCenter.y - worldPoint.y,
+        )
+
+        return pixelADistance - pixelBDistance
+      })
+      .slice(0, removableCount)
+
+    const destroyedKeys = new Set(
+      pixelsToDestroy.map((pixel) => this.getPixelKey(pixel)),
+    )
+
+    ship.pixels = ship.pixels.filter(
+      (pixel) => !destroyedKeys.has(this.getPixelKey(pixel)),
+    )
+
+    return pixelsToDestroy
+  }
+
+  private highlightDestroyedPixels(
+    ship: "player" | "enemy",
+    enemyIndex: number | undefined,
+    pixels: readonly ShipPixel[],
+  ): void {
+    for (const pixel of pixels) {
+      this.state.pixelHighlights.push({
+        ship,
+        enemyIndex,
+        gridX: pixel.gridX,
+        gridY: pixel.gridY,
+        remainingSeconds: collisionHighlightDuration,
+      })
     }
   }
 
@@ -337,6 +499,10 @@ export class Game {
       shipBPixel.gridX,
       shipBPixel.gridY,
     ].join(":")
+  }
+
+  private getPixelKey(pixel: ShipPixel): string {
+    return `${pixel.gridX}:${pixel.gridY}`
   }
 
   private wrapShip(ship: Ship): void {
