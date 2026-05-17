@@ -50,7 +50,10 @@ export class Renderer {
   }
 
   private applyScreenShake(state: GameState): void {
-    if (state.screenShake.remainingSeconds <= 0 || state.screenShake.magnitude <= 0) {
+    if (
+      state.screenShake.remainingSeconds <= 0 ||
+      state.screenShake.magnitude <= 0
+    ) {
       return
     }
 
@@ -72,22 +75,14 @@ export class Renderer {
     context.strokeStyle = "#263041"
     context.lineWidth = 1
 
-    for (
-      let x = centerX % pixelSize;
-      x <= width;
-      x += pixelSize
-    ) {
+    for (let x = centerX % pixelSize; x <= width; x += pixelSize) {
       context.beginPath()
       context.moveTo(x, 0)
       context.lineTo(x, height)
       context.stroke()
     }
 
-    for (
-      let y = centerY % pixelSize;
-      y <= height;
-      y += pixelSize
-    ) {
+    for (let y = centerY % pixelSize; y <= height; y += pixelSize) {
       context.beginPath()
       context.moveTo(0, y)
       context.lineTo(width, y)
@@ -151,7 +146,8 @@ export class Renderer {
   private drawStatus(state: GameState): void {
     const { context } = this
     const colorLabel =
-      state.selectedPixelColor[0].toUpperCase() + state.selectedPixelColor.slice(1)
+      state.selectedPixelColor[0].toUpperCase() +
+      state.selectedPixelColor.slice(1)
     const modeLabel = state.mode === "build" ? "Build Mode" : "Game Mode"
 
     context.save()
@@ -162,8 +158,30 @@ export class Renderer {
 
     if (state.mode === "build") {
       context.fillText(`Color: ${colorLabel} | 1 Red  2 Green  3 Blue`, 18, 40)
-      context.fillText("Click place/recolor | Right click or shift-click remove", 18, 64)
+      context.fillText(
+        "Click place/recolor | Right click or shift-click remove",
+        18,
+        64,
+      )
     }
+
+    const statsX = state.width - 210
+    context.textAlign = "left"
+    context.fillText(
+      `Thrust: ${Math.round(state.ship.stats.thrustPower)}`,
+      statsX,
+      16,
+    )
+    context.fillText(
+      `Resistance: ${Math.round(state.ship.stats.damageResistance * 100)}%`,
+      statsX,
+      40,
+    )
+    context.fillText(
+      `Ramming: ${state.ship.stats.rammingPower.toFixed(1)}x`,
+      statsX,
+      64,
+    )
 
     context.restore()
   }

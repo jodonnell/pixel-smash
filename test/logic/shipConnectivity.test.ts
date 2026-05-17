@@ -7,6 +7,7 @@ import {
   hasPixelAt,
   isShipConnected,
 } from "../../src/shipConnectivity"
+import { calculateShipStats } from "../../src/shipStats"
 import type { Ship, ShipPixel } from "../../src/types"
 
 const createShip = (pixels: ShipPixel[]): Ship => ({
@@ -14,6 +15,7 @@ const createShip = (pixels: ShipPixel[]): Ship => ({
   velocity: { x: 0, y: 0 },
   rotation: 0,
   pixels,
+  stats: calculateShipStats(pixels),
 })
 
 describe("ship pixel connectivity utilities", () => {
@@ -82,7 +84,11 @@ describe("ship pixel connectivity utilities", () => {
     expect(canRemovePixel(lineShip, -1, 0)).toBe(true)
     expect(canRemovePixel(lineShip, 9, 9)).toBe(false)
     expect(
-      canRemovePixel(createShip([{ gridX: 0, gridY: 0, color: "green" }]), 0, 0),
+      canRemovePixel(
+        createShip([{ gridX: 0, gridY: 0, color: "green" }]),
+        0,
+        0,
+      ),
     ).toBe(false)
   })
 })

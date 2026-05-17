@@ -13,6 +13,12 @@ export type ShipPixel = {
   color: PixelColor
 }
 
+export type ShipStats = {
+  thrustPower: number
+  damageResistance: number
+  rammingPower: number
+}
+
 export type PixelCollision = {
   shipAPixel: ShipPixel
   shipBPixel: ShipPixel
@@ -40,6 +46,7 @@ export type Ship = {
   velocity: Vector2
   rotation: number
   pixels: ShipPixel[]
+  stats: ShipStats
 }
 
 export type EnemyShip = Ship & {

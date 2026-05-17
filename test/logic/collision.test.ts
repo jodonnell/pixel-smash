@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { detectPixelCollisions, getPixelWorldCenter } from "../../src/collision"
 import { Game, removePixelsNearImpact } from "../../src/game"
 import { isShipConnected } from "../../src/shipConnectivity"
+import { calculateShipStats } from "../../src/shipStats"
 import type { EnemyShip, InputState, Ship } from "../../src/types"
 
 const createShip = (
@@ -14,6 +15,7 @@ const createShip = (
   velocity: { x: 0, y: 0 },
   rotation,
   pixels,
+  stats: calculateShipStats(pixels),
 })
 
 describe("pixel collision detection", () => {
@@ -52,6 +54,7 @@ describe("ramming damage", () => {
     rotation: 0,
     angularVelocity: 0,
     pixels,
+    stats: calculateShipStats(pixels),
   })
 
   it("does not damage either ship below the minimum impact speed", () => {
@@ -124,11 +127,7 @@ describe("ramming damage", () => {
     expect(game.state.ship.velocity.x).toBeLessThan(260)
     expect(game.state.enemies[0].velocity.x).toBeGreaterThan(0)
     expect(
-      detectPixelCollisions(
-        game.state.ship,
-        game.state.enemies[0],
-        18,
-      ),
+      detectPixelCollisions(game.state.ship, game.state.enemies[0], 18),
     ).toHaveLength(0)
     expect(game.state.screenShake.remainingSeconds).toBeGreaterThan(0)
 
@@ -141,6 +140,86 @@ describe("ramming damage", () => {
 
     expect(game.state.ship.pixels).toHaveLength(playerPixelCount)
     expect(game.state.enemies[0].pixels).toHaveLength(enemyPixelCount)
+  })
+
+  it("uses red pixels to increase outgoing ramming damage", () => {
+    const weakRamGame = new Game(960, 540)
+    weakRamGame.toggleMode()
+    weakRamGame.state.ship.pixels = [{ gridX: 0, gridY: 0, color: "green" }]
+    weakRamGame.state.ship.velocity = { x: 170, y: 0 }
+    weakRamGame.state.enemies = [
+      createEnemy([
+        { gridX: 0, gridY: 0, color: "blue" },
+        { gridX: 1, gridY: 0, color: "blue" },
+        { gridX: 2, gridY: 0, color: "blue" },
+        { gridX: 3, gridY: 0, color: "blue" },
+        { gridX: 4, gridY: 0, color: "blue" },
+      ]),
+    ]
+
+    const strongRamGame = new Game(960, 540)
+    strongRamGame.toggleMode()
+    strongRamGame.state.ship.pixels = [
+      { gridX: 0, gridY: 0, color: "red" },
+      { gridX: 1, gridY: 0, color: "red" },
+      { gridX: 2, gridY: 0, color: "red" },
+      { gridX: 3, gridY: 0, color: "red" },
+      { gridX: 4, gridY: 0, color: "red" },
+    ]
+    strongRamGame.state.ship.velocity = { x: 170, y: 0 }
+    strongRamGame.state.enemies = [
+      createEnemy([
+        { gridX: 0, gridY: 0, color: "blue" },
+        { gridX: 1, gridY: 0, color: "blue" },
+        { gridX: 2, gridY: 0, color: "blue" },
+        { gridX: 3, gridY: 0, color: "blue" },
+        { gridX: 4, gridY: 0, color: "blue" },
+      ]),
+    ]
+
+    weakRamGame.update(noInput, 0)
+    strongRamGame.update(noInput, 0)
+
+    expect(strongRamGame.state.enemies[0].pixels.length).toBeLessThan(
+      weakRamGame.state.enemies[0].pixels.length,
+    )
+  })
+
+  it("uses green pixels to reduce incoming ramming damage", () => {
+    const fragileGame = new Game(960, 540)
+    fragileGame.toggleMode()
+    fragileGame.state.ship.pixels = [
+      { gridX: 0, gridY: 0, color: "blue" },
+      { gridX: 1, gridY: 0, color: "blue" },
+      { gridX: 2, gridY: 0, color: "blue" },
+      { gridX: 3, gridY: 0, color: "blue" },
+      { gridX: 4, gridY: 0, color: "blue" },
+    ]
+    fragileGame.state.ship.velocity = { x: 170, y: 0 }
+    fragileGame.state.enemies = [
+      createEnemy([{ gridX: 0, gridY: 0, color: "red" }]),
+    ]
+
+    const durableGame = new Game(960, 540)
+    durableGame.toggleMode()
+    durableGame.state.ship.pixels = [
+      { gridX: 0, gridY: 0, color: "green" },
+      { gridX: 1, gridY: 0, color: "green" },
+      { gridX: 2, gridY: 0, color: "green" },
+      { gridX: 3, gridY: 0, color: "green" },
+      { gridX: 4, gridY: 0, color: "green" },
+    ]
+    durableGame.state.ship.velocity = { x: 170, y: 0 }
+    durableGame.state.enemies = [
+      createEnemy([{ gridX: 0, gridY: 0, color: "red" }]),
+    ]
+
+    fragileGame.update(noInput, 0)
+    durableGame.update(noInput, 0)
+
+    expect(durableGame.state.ship.pixels.length).toBeGreaterThan(
+      fragileGame.state.ship.pixels.length,
+    )
   })
 })
 

@@ -1,6 +1,26 @@
 import { Game } from "../../src/game"
 
 describe("build mode ship editing", () => {
+  it("recalculates ship stats when pixels are placed, recolored, and removed", () => {
+    const game = new Game(960, 540)
+
+    expect(game.state.ship.stats.thrustPower).toBe(360)
+    expect(game.state.ship.stats.damageResistance).toBeCloseTo(0.3)
+    expect(game.state.ship.stats.rammingPower).toBe(1.4)
+
+    game.setSelectedPixelColor("blue")
+    expect(game.tryPlacePixel(2, 0)).toBe(true)
+    expect(game.state.ship.stats.thrustPower).toBe(420)
+
+    game.setSelectedPixelColor("red")
+    expect(game.tryPlacePixel(2, 0)).toBe(true)
+    expect(game.state.ship.stats.thrustPower).toBe(360)
+    expect(game.state.ship.stats.rammingPower).toBe(1.6)
+
+    expect(game.tryRemovePixel(2, 0)).toBe(true)
+    expect(game.state.ship.stats.rammingPower).toBe(1.4)
+  })
+
   it("only places new pixels next to the ship", () => {
     const game = new Game(960, 540)
 
@@ -34,6 +54,7 @@ describe("build mode ship editing", () => {
 
     game.state.ship.position.x = 100
     game.state.ship.velocity.x = 80
+    game.state.enemies = []
     game.update(
       { rotateLeft: false, rotateRight: false, thrust: true, reverse: false },
       1,
@@ -49,5 +70,35 @@ describe("build mode ship editing", () => {
     )
 
     expect(game.state.ship.velocity.x).toBeGreaterThan(0)
+  })
+
+  it("uses blue pixels to increase thrust", () => {
+    const lowEngineGame = new Game(960, 540)
+    lowEngineGame.state.ship.pixels = [{ gridX: 0, gridY: 0, color: "green" }]
+    lowEngineGame.state.enemies = []
+    lowEngineGame.toggleMode()
+
+    const highEngineGame = new Game(960, 540)
+    highEngineGame.state.ship.pixels = [
+      { gridX: 0, gridY: 0, color: "green" },
+      { gridX: 1, gridY: 0, color: "blue" },
+      { gridX: 2, gridY: 0, color: "blue" },
+    ]
+    highEngineGame.state.enemies = []
+    highEngineGame.toggleMode()
+
+    const thrustInput = {
+      rotateLeft: false,
+      rotateRight: false,
+      thrust: true,
+      reverse: false,
+    }
+
+    lowEngineGame.update(thrustInput, 0.1)
+    highEngineGame.update(thrustInput, 0.1)
+
+    expect(highEngineGame.state.ship.velocity.x).toBeGreaterThan(
+      lowEngineGame.state.ship.velocity.x,
+    )
   })
 })
