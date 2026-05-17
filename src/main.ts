@@ -43,8 +43,73 @@ const getCanvasPoint = (event: MouseEvent): { x: number; y: number } => {
   }
 }
 
+type BuildPointerAction = "place" | "remove"
+
+let lastBuildGridPoint: { x: number; y: number } | undefined
+
+const getBuildPointerAction = (
+  event: MouseEvent,
+): BuildPointerAction | undefined => {
+  const isLeftButtonDown = (event.buttons & 1) === 1
+  const isRightButtonDown = (event.buttons & 2) === 2
+
+  if (
+    (event.type === "mousedown" && event.button === 2) ||
+    isRightButtonDown ||
+    (event.shiftKey && isLeftButtonDown)
+  ) {
+    return "remove"
+  }
+
+  if ((event.type === "mousedown" && event.button === 0) || isLeftButtonDown) {
+    return "place"
+  }
+
+  return undefined
+}
+
+const applyBuildPointerAction = (
+  action: BuildPointerAction,
+  gridX: number,
+  gridY: number,
+): void => {
+  if (action === "remove") {
+    game.tryRemovePixel(gridX, gridY)
+    return
+  }
+
+  game.tryPlacePixel(gridX, gridY)
+}
+
+const applyBuildPointerPath = (
+  action: BuildPointerAction,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+): void => {
+  let x = from.x
+  let y = from.y
+  const stepX = Math.sign(to.x - from.x)
+  const stepY = Math.sign(to.y - from.y)
+
+  while (x !== to.x) {
+    x += stepX
+    applyBuildPointerAction(action, x, y)
+  }
+
+  while (y !== to.y) {
+    y += stepY
+    applyBuildPointerAction(action, x, y)
+  }
+}
+
 const handleBuildPointer = (event: MouseEvent): void => {
   if (game.state.mode !== "build") {
+    return
+  }
+
+  const action = getBuildPointerAction(event)
+
+  if (action === undefined) {
     return
   }
 
@@ -53,18 +118,27 @@ const handleBuildPointer = (event: MouseEvent): void => {
   const point = getCanvasPoint(event)
   const gridPoint = game.screenToBuildGrid(point.x, point.y)
 
-  if (event.button === 2 || event.shiftKey) {
-    game.tryRemovePixel(gridPoint.x, gridPoint.y)
-  } else if (event.button === 0) {
-    game.tryPlacePixel(gridPoint.x, gridPoint.y)
+  if (lastBuildGridPoint === undefined) {
+    applyBuildPointerAction(action, gridPoint.x, gridPoint.y)
+  } else if (
+    lastBuildGridPoint.x !== gridPoint.x ||
+    lastBuildGridPoint.y !== gridPoint.y
+  ) {
+    applyBuildPointerPath(action, lastBuildGridPoint, gridPoint)
   }
+
+  lastBuildGridPoint = gridPoint
 }
 
 canvas.addEventListener("mousedown", handleBuildPointer)
+canvas.addEventListener("mousemove", handleBuildPointer)
 canvas.addEventListener("contextmenu", (event) => {
   if (game.state.mode === "build") {
     event.preventDefault()
   }
+})
+window.addEventListener("mouseup", () => {
+  lastBuildGridPoint = undefined
 })
 
 let previousTimestamp = performance.now()
