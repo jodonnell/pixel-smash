@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { detectPixelCollisions, getPixelWorldCenter } from "../../src/collision"
-import { Game } from "../../src/game"
+import { Game, removePixelsNearImpact } from "../../src/game"
+import { isShipConnected } from "../../src/shipConnectivity"
 import type { EnemyShip, InputState, Ship } from "../../src/types"
 
 const createShip = (
@@ -82,17 +83,8 @@ describe("ramming damage", () => {
     game.update(noInput, 0)
 
     expect(game.state.ship.pixels).toHaveLength(5)
-    expect(game.state.ship.pixels).not.toContainEqual({
-      gridX: 0,
-      gridY: 0,
-      color: "green",
-    })
+    expect(isShipConnected(game.state.ship)).toBe(true)
     expect(game.state.enemies[0].pixels).toHaveLength(1)
-    expect(game.state.enemies[0].pixels).not.toContainEqual({
-      gridX: 0,
-      gridY: 0,
-      color: "green",
-    })
   })
 
   it("keeps at least one pixel on both ships after a severe impact", () => {
@@ -111,5 +103,59 @@ describe("ramming damage", () => {
 
     expect(game.state.ship.pixels).toHaveLength(1)
     expect(game.state.enemies[0].pixels).toHaveLength(1)
+  })
+})
+
+describe("impact-localized damage", () => {
+  it("removes pixels closest to the impact point in the ship's local grid", () => {
+    const ship = createShip(100, 50, Math.PI / 2, [
+      { gridX: 0, gridY: 0, color: "green" },
+      { gridX: 0, gridY: 1, color: "red" },
+      { gridX: 0, gridY: 2, color: "blue" },
+      { gridX: 0, gridY: 3, color: "green" },
+    ])
+
+    const destroyedPixels = removePixelsNearImpact(ship, 46, 50, 2)
+
+    expect(destroyedPixels).toEqual([
+      { gridX: 0, gridY: 3, color: "green" },
+      { gridX: 0, gridY: 2, color: "blue" },
+    ])
+    expect(ship.pixels).toEqual([
+      { gridX: 0, gridY: 0, color: "green" },
+      { gridX: 0, gridY: 1, color: "red" },
+    ])
+  })
+
+  it("prefers nearby removals that keep the ship connected", () => {
+    const ship = createShip(0, 0, 0, [
+      { gridX: 0, gridY: 0, color: "green" },
+      { gridX: 1, gridY: 0, color: "red" },
+      { gridX: -1, gridY: 0, color: "blue" },
+      { gridX: 0, gridY: -1, color: "blue" },
+      { gridX: 0, gridY: 1, color: "red" },
+    ])
+
+    const destroyedPixels = removePixelsNearImpact(ship, 0, 0, 1)
+
+    expect(destroyedPixels).toEqual([{ gridX: 1, gridY: 0, color: "red" }])
+    expect(ship.pixels).toContainEqual({ gridX: 0, gridY: 0, color: "green" })
+    expect(isShipConnected(ship)).toBe(true)
+  })
+
+  it("allows the least fragmenting nearby removal when the ship is already split", () => {
+    const ship = createShip(0, 0, 0, [
+      { gridX: 0, gridY: 0, color: "green" },
+      { gridX: 3, gridY: 0, color: "red" },
+      { gridX: 4, gridY: 0, color: "blue" },
+    ])
+
+    const destroyedPixels = removePixelsNearImpact(ship, 0, 0, 1)
+
+    expect(destroyedPixels).toEqual([{ gridX: 0, gridY: 0, color: "green" }])
+    expect(ship.pixels).toEqual([
+      { gridX: 3, gridY: 0, color: "red" },
+      { gridX: 4, gridY: 0, color: "blue" },
+    ])
   })
 })

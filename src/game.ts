@@ -1,5 +1,5 @@
 import { canPlacePixel, canRemovePixel, getPixelAt } from "./shipConnectivity"
-import { detectPixelCollisions, getPixelWorldCenter } from "./collision"
+import { detectPixelCollisions } from "./collision"
 import type {
   EnemyShip,
   GameState,
@@ -23,6 +23,168 @@ const enemyMinSpin = 0.25
 const enemyMaxSpin = 0.7
 const collisionHighlightDuration = 0.2
 const minimumDamageImpactSpeed = 50
+
+type RemovalCandidate = {
+  pixel: ShipPixel
+  distance: number
+  connected: boolean
+  componentCount: number
+  largestComponentSize: number
+}
+
+const getPixelKey = (pixel: ShipPixel): string => `${pixel.gridX}:${pixel.gridY}`
+
+const getRemainingPixels = (
+  ship: Ship,
+  pixelToRemove: ShipPixel,
+): ShipPixel[] =>
+  ship.pixels.filter((pixel) => getPixelKey(pixel) !== getPixelKey(pixelToRemove))
+
+const getConnectivityScore = (
+  ship: Ship,
+  pixelToRemove: ShipPixel,
+): {
+  connected: boolean
+  componentCount: number
+  largestComponentSize: number
+} => {
+  const remainingPixels = getRemainingPixels(ship, pixelToRemove)
+
+  if (remainingPixels.length === 0) {
+    return {
+      connected: false,
+      componentCount: 0,
+      largestComponentSize: 0,
+    }
+  }
+
+  const remainingKeys = new Set(remainingPixels.map(getPixelKey))
+  let componentCount = 0
+  let largestComponentSize = 0
+
+  while (remainingKeys.size > 0) {
+    const firstKey = remainingKeys.values().next().value
+
+    if (firstKey === undefined) {
+      break
+    }
+
+    componentCount += 1
+    let componentSize = 0
+    const queuedKeys = [firstKey]
+    remainingKeys.delete(firstKey)
+
+    while (queuedKeys.length > 0) {
+      const key = queuedKeys.pop()
+
+      if (key === undefined) {
+        continue
+      }
+
+      componentSize += 1
+      const [gridX, gridY] = key.split(":").map(Number)
+      const neighborKeys = [
+        `${gridX + 1}:${gridY}`,
+        `${gridX - 1}:${gridY}`,
+        `${gridX}:${gridY + 1}`,
+        `${gridX}:${gridY - 1}`,
+      ]
+
+      for (const neighborKey of neighborKeys) {
+        if (!remainingKeys.has(neighborKey)) {
+          continue
+        }
+
+        remainingKeys.delete(neighborKey)
+        queuedKeys.push(neighborKey)
+      }
+    }
+
+    largestComponentSize = Math.max(largestComponentSize, componentSize)
+  }
+
+  return {
+    connected: componentCount === 1,
+    componentCount,
+    largestComponentSize,
+  }
+}
+
+const getLocalGridPoint = (
+  ship: Ship,
+  worldX: number,
+  worldY: number,
+): { x: number; y: number } => {
+  const worldOffsetX = worldX - ship.position.x
+  const worldOffsetY = worldY - ship.position.y
+  const cos = Math.cos(ship.rotation)
+  const sin = Math.sin(ship.rotation)
+
+  return {
+    x: (worldOffsetX * cos + worldOffsetY * sin) / buildGridCellSize,
+    y: (-worldOffsetX * sin + worldOffsetY * cos) / buildGridCellSize,
+  }
+}
+
+const compareRemovalCandidates = (
+  candidateA: RemovalCandidate,
+  candidateB: RemovalCandidate,
+): number => {
+  if (candidateA.connected !== candidateB.connected) {
+    return candidateA.connected ? -1 : 1
+  }
+
+  if (!candidateA.connected && candidateA.componentCount !== candidateB.componentCount) {
+    return candidateA.componentCount - candidateB.componentCount
+  }
+
+  if (
+    !candidateA.connected &&
+    candidateA.largestComponentSize !== candidateB.largestComponentSize
+  ) {
+    return candidateB.largestComponentSize - candidateA.largestComponentSize
+  }
+
+  return candidateA.distance - candidateB.distance
+}
+
+export const removePixelsNearImpact = (
+  ship: Ship,
+  worldImpactX: number,
+  worldImpactY: number,
+  damageAmount: number,
+): ShipPixel[] => {
+  const destroyedPixels: ShipPixel[] = []
+
+  while (destroyedPixels.length < damageAmount && ship.pixels.length > 1) {
+    const localImpact = getLocalGridPoint(ship, worldImpactX, worldImpactY)
+    const candidates = ship.pixels
+      .map((pixel): RemovalCandidate => {
+        const connectivityScore = getConnectivityScore(ship, pixel)
+
+        return {
+          pixel,
+          distance: Math.hypot(
+            pixel.gridX - localImpact.x,
+            pixel.gridY - localImpact.y,
+          ),
+          ...connectivityScore,
+        }
+      })
+      .sort(compareRemovalCandidates)
+
+    const pixelToDestroy = candidates[0]?.pixel
+
+    if (pixelToDestroy === undefined) {
+      break
+    }
+
+    destroyedPixels.push(pixelToDestroy)
+    ship.pixels = getRemainingPixels(ship, pixelToDestroy)
+  }
+
+  return destroyedPixels
+}
 
 const createPlayerPixels = () =>
   [
@@ -329,21 +491,23 @@ export class Game {
     }
 
     const playerDamage = Math.max(1, Math.ceil(enemyDamage * 0.5))
-    const playerImpactCenter = this.getAverageCollisionCenter(
-      collisions.map((collision) => collision.shipACenter),
-    )
-    const enemyImpactCenter = this.getAverageCollisionCenter(
-      collisions.map((collision) => collision.shipBCenter),
+    const worldImpactPoint = this.getAverageCollisionCenter(
+      collisions.map((collision) => ({
+        x: (collision.shipACenter.x + collision.shipBCenter.x) / 2,
+        y: (collision.shipACenter.y + collision.shipBCenter.y) / 2,
+      })),
     )
 
-    const destroyedPlayerPixels = this.destroyPixelsNearWorldPoint(
+    const destroyedPlayerPixels = removePixelsNearImpact(
       this.state.ship,
-      playerImpactCenter,
+      worldImpactPoint.x,
+      worldImpactPoint.y,
       playerDamage,
     )
-    const destroyedEnemyPixels = this.destroyPixelsNearWorldPoint(
+    const destroyedEnemyPixels = removePixelsNearImpact(
       enemy,
-      enemyImpactCenter,
+      worldImpactPoint.x,
+      worldImpactPoint.y,
       enemyDamage,
     )
 
@@ -385,53 +549,6 @@ export class Game {
       x: total.x / points.length,
       y: total.y / points.length,
     }
-  }
-
-  private destroyPixelsNearWorldPoint(
-    ship: Ship,
-    worldPoint: { x: number; y: number },
-    requestedDamage: number,
-  ): ShipPixel[] {
-    const removableCount = Math.min(requestedDamage, ship.pixels.length - 1)
-
-    if (removableCount <= 0) {
-      return []
-    }
-
-    const pixelsToDestroy = [...ship.pixels]
-      .sort((pixelA, pixelB) => {
-        const pixelACenter = getPixelWorldCenter(
-          ship,
-          pixelA,
-          buildGridCellSize,
-        )
-        const pixelBCenter = getPixelWorldCenter(
-          ship,
-          pixelB,
-          buildGridCellSize,
-        )
-        const pixelADistance = Math.hypot(
-          pixelACenter.x - worldPoint.x,
-          pixelACenter.y - worldPoint.y,
-        )
-        const pixelBDistance = Math.hypot(
-          pixelBCenter.x - worldPoint.x,
-          pixelBCenter.y - worldPoint.y,
-        )
-
-        return pixelADistance - pixelBDistance
-      })
-      .slice(0, removableCount)
-
-    const destroyedKeys = new Set(
-      pixelsToDestroy.map((pixel) => this.getPixelKey(pixel)),
-    )
-
-    ship.pixels = ship.pixels.filter(
-      (pixel) => !destroyedKeys.has(this.getPixelKey(pixel)),
-    )
-
-    return pixelsToDestroy
   }
 
   private highlightDestroyedPixels(
@@ -499,10 +616,6 @@ export class Game {
       shipBPixel.gridX,
       shipBPixel.gridY,
     ].join(":")
-  }
-
-  private getPixelKey(pixel: ShipPixel): string {
-    return `${pixel.gridX}:${pixel.gridY}`
   }
 
   private wrapShip(ship: Ship): void {
