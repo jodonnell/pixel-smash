@@ -20,8 +20,11 @@ export const maxPlayerShipPixels = 16
 const enemyCount = 3
 const enemyMinSpeed = 25
 const enemyMaxSpeed = 70
-const enemyMinSpin = 0.25
-const enemyMaxSpin = 0.7
+const enemyTurnSpeed = Math.PI * 1.35
+const enemyThrustScale = 0.85
+const enemyPursuitMaxSpeed = 390
+const enemyAimLeadSeconds = 0.45
+const enemyThrustAlignment = Math.PI * 0.58
 const collisionHighlightDuration = 0.2
 const minimumDamageImpactSpeed = 50
 const collisionCooldownSeconds = 0.3
@@ -259,6 +262,42 @@ const enemyPixelShapes: readonly (readonly ShipPixel[])[] = [
 const randomBetween = (min: number, max: number): number =>
   min + Math.random() * (max - min)
 
+const clamp = (value: number, min: number, max: number): number =>
+  Math.min(max, Math.max(min, value))
+
+const wrapCoordinate = (coordinate: number, max: number): number =>
+  ((coordinate % max) + max) % max
+
+const getShortestWrappedDistance = (
+  from: number,
+  to: number,
+  size: number,
+): number => {
+  let distance = to - from
+
+  if (distance > size / 2) {
+    distance -= size
+  } else if (distance < -size / 2) {
+    distance += size
+  }
+
+  return distance
+}
+
+const getAngleDelta = (from: number, to: number): number => {
+  let delta = to - from
+
+  while (delta > Math.PI) {
+    delta -= Math.PI * 2
+  }
+
+  while (delta < -Math.PI) {
+    delta += Math.PI * 2
+  }
+
+  return delta
+}
+
 const createEnemyShip = (
   width: number,
   height: number,
@@ -266,7 +305,6 @@ const createEnemyShip = (
 ): EnemyShip => {
   const driftDirection = randomBetween(0, Math.PI * 2)
   const driftSpeed = randomBetween(enemyMinSpeed, enemyMaxSpeed)
-  const spinDirection = Math.random() < 0.5 ? -1 : 1
 
   const pixels = enemyPixelShapes[index % enemyPixelShapes.length].map(
     (pixel) => ({
@@ -284,7 +322,7 @@ const createEnemyShip = (
       y: Math.sin(driftDirection) * driftSpeed,
     },
     rotation: randomBetween(0, Math.PI * 2),
-    angularVelocity: spinDirection * randomBetween(enemyMinSpin, enemyMaxSpin),
+    angularVelocity: 0,
     pixels,
     stats: calculateShipStats(pixels),
   }
@@ -517,25 +555,90 @@ export class Game {
   }
 
   private limitSpeed(): void {
-    const { velocity } = this.state.ship
+    this.limitShipSpeed(this.state.ship, maxSpeed)
+  }
+
+  private limitShipSpeed(ship: Ship, speedLimit: number): void {
+    const { velocity } = ship
     const speed = Math.hypot(velocity.x, velocity.y)
 
-    if (speed <= maxSpeed) {
+    if (speed <= speedLimit) {
       return
     }
 
-    const scale = maxSpeed / speed
+    const scale = speedLimit / speed
     velocity.x *= scale
     velocity.y *= scale
   }
 
   private updateEnemies(deltaSeconds: number): void {
     for (const enemy of this.state.enemies) {
+      this.updateEnemyAi(enemy, deltaSeconds)
       enemy.position.x += enemy.velocity.x * deltaSeconds
       enemy.position.y += enemy.velocity.y * deltaSeconds
-      enemy.rotation += enemy.angularVelocity * deltaSeconds
       this.wrapShip(enemy)
     }
+  }
+
+  private updateEnemyAi(enemy: EnemyShip, deltaSeconds: number): void {
+    if (enemy.pixels.length <= 1) {
+      enemy.velocity.x *= drag
+      enemy.velocity.y *= drag
+      enemy.rotation += enemy.angularVelocity * deltaSeconds
+      this.limitShipSpeed(enemy, enemyPursuitMaxSpeed * 0.5)
+      return
+    }
+
+    const player = this.state.ship
+    const targetPosition = {
+      x: wrapCoordinate(
+        player.position.x + player.velocity.x * enemyAimLeadSeconds,
+        this.state.width,
+      ),
+      y: wrapCoordinate(
+        player.position.y + player.velocity.y * enemyAimLeadSeconds,
+        this.state.height,
+      ),
+    }
+    const targetOffset = {
+      x: getShortestWrappedDistance(
+        enemy.position.x,
+        targetPosition.x,
+        this.state.width,
+      ),
+      y: getShortestWrappedDistance(
+        enemy.position.y,
+        targetPosition.y,
+        this.state.height,
+      ),
+    }
+    const targetDistance = Math.hypot(targetOffset.x, targetOffset.y)
+
+    if (targetDistance > 0.0001) {
+      const targetAngle = Math.atan2(targetOffset.y, targetOffset.x)
+      const angleDelta = getAngleDelta(enemy.rotation, targetAngle)
+      const turnAmount = clamp(
+        angleDelta,
+        -enemyTurnSpeed * deltaSeconds,
+        enemyTurnSpeed * deltaSeconds,
+      )
+
+      enemy.rotation += turnAmount
+      enemy.angularVelocity = deltaSeconds > 0 ? turnAmount / deltaSeconds : 0
+
+      if (Math.abs(angleDelta) < enemyThrustAlignment) {
+        const forwardX = Math.cos(enemy.rotation)
+        const forwardY = Math.sin(enemy.rotation)
+        const thrustPower = enemy.stats.thrustPower * enemyThrustScale
+
+        enemy.velocity.x += forwardX * thrustPower * deltaSeconds
+        enemy.velocity.y += forwardY * thrustPower * deltaSeconds
+      }
+    }
+
+    enemy.velocity.x *= drag
+    enemy.velocity.y *= drag
+    this.limitShipSpeed(enemy, enemyPursuitMaxSpeed)
   }
 
   private updateCollisionCooldowns(deltaSeconds: number): void {

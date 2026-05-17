@@ -331,6 +331,61 @@ describe("ramming damage", () => {
   })
 })
 
+describe("enemy ai", () => {
+  const noInput: InputState = {
+    rotateLeft: false,
+    rotateRight: false,
+    thrust: false,
+    reverse: false,
+  }
+
+  const createEnemy = (
+    position: EnemyShip["position"],
+    rotation: number,
+  ): EnemyShip => {
+    const pixels: EnemyShip["pixels"] = [
+      { gridX: 0, gridY: 0, color: "red" },
+      { gridX: 1, gridY: 0, color: "blue" },
+    ]
+
+    return {
+      position,
+      velocity: { x: 0, y: 0 },
+      rotation,
+      angularVelocity: 0,
+      pixels,
+      stats: calculateShipStats(pixels),
+    }
+  }
+
+  it("turns and thrusts enemy ships toward the player", () => {
+    const game = new Game(960, 540)
+    game.toggleMode()
+    game.state.ship.position = { x: 240, y: 120 }
+    game.state.ship.velocity = { x: 0, y: 0 }
+    game.state.enemies = [createEnemy({ x: 120, y: 120 }, 0)]
+
+    game.update(noInput, 0.5)
+
+    expect(game.state.enemies[0].velocity.x).toBeGreaterThan(90)
+    expect(Math.abs(game.state.enemies[0].velocity.y)).toBeLessThan(1)
+    expect(game.state.enemies[0].position.x).toBeGreaterThan(120)
+  })
+
+  it("uses the shortest wrapped path when pursuing across the screen edge", () => {
+    const game = new Game(960, 540)
+    game.toggleMode()
+    game.state.ship.position = { x: 950, y: 120 }
+    game.state.ship.velocity = { x: 0, y: 0 }
+    game.state.enemies = [createEnemy({ x: 10, y: 120 }, Math.PI)]
+
+    game.update(noInput, 0.5)
+
+    expect(game.state.enemies[0].velocity.x).toBeLessThan(-90)
+    expect(Math.abs(game.state.enemies[0].velocity.y)).toBeLessThan(1)
+  })
+})
+
 describe("impact-localized damage", () => {
   it("removes pixels closest to the impact point in the ship's local grid", () => {
     const ship = createShip(100, 50, Math.PI / 2, [
