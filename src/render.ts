@@ -27,6 +27,7 @@ export class Renderer {
     this.drawShip(
       state.ship,
       state.pixelHighlights.filter((highlight) => highlight.ship === "player"),
+      true,
     )
 
     if (state.mode === "game") {
@@ -128,7 +129,11 @@ export class Renderer {
     context.restore()
   }
 
-  private drawShip(ship: Ship, highlights: PixelHighlight[]): void {
+  private drawShip(
+    ship: Ship,
+    highlights: PixelHighlight[],
+    showFacingMarker = false,
+  ): void {
     const { context } = this
 
     context.save()
@@ -158,6 +163,32 @@ export class Renderer {
       }
     }
 
+    if (showFacingMarker) {
+      this.drawFacingMarker(ship)
+    }
+
+    context.restore()
+  }
+
+  private drawFacingMarker(ship: Ship): void {
+    const { context } = this
+    const frontEdge = ship.pixels.reduce(
+      (edge, pixel) => Math.max(edge, pixel.gridX * pixelSize + pixelSize / 2),
+      pixelSize / 2,
+    )
+    const markerX = frontEdge + 10
+
+    context.save()
+    context.fillStyle = "#fff7a8"
+    context.strokeStyle = "#020617"
+    context.lineWidth = 3
+    context.beginPath()
+    context.moveTo(markerX + 10, 0)
+    context.lineTo(markerX - 4, -8)
+    context.lineTo(markerX - 4, 8)
+    context.closePath()
+    context.stroke()
+    context.fill()
     context.restore()
   }
 
