@@ -689,11 +689,6 @@ export class Game {
           x: debris.position.x + debris.velocity.x * deltaSeconds,
           y: debris.position.y + debris.velocity.y * deltaSeconds,
         },
-        velocity: {
-          x: debris.velocity.x * 0.985,
-          y: debris.velocity.y * 0.985,
-        },
-        rotation: debris.rotation + debris.angularVelocity * deltaSeconds,
       }))
       .filter((debris) => debris.ageSeconds < debris.lifetimeSeconds)
   }
@@ -1116,11 +1111,17 @@ export class Game {
       this.state.debris.push({
         position: center,
         velocity: {
-          x: awayFromImpact.x * debrisSpeed + randomBetween(-45, 45),
-          y: awayFromImpact.y * debrisSpeed + randomBetween(-45, 45),
+          x:
+            ship.velocity.x +
+            awayFromImpact.x * debrisSpeed +
+            randomBetween(-20, 20),
+          y:
+            ship.velocity.y +
+            awayFromImpact.y * debrisSpeed +
+            randomBetween(-20, 20),
         },
-        rotation: randomBetween(0, Math.PI * 2),
-        angularVelocity: randomBetween(-8, 8),
+        rotation: ship.rotation,
+        angularVelocity: 0,
         color: pixel.color,
         size: buildGridCellSize - 5,
         ageSeconds: 0,

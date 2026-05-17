@@ -386,6 +386,39 @@ describe("enemy ai", () => {
   })
 })
 
+describe("debris drift", () => {
+  const noInput: InputState = {
+    rotateLeft: false,
+    rotateRight: false,
+    thrust: false,
+    reverse: false,
+  }
+
+  it("moves broken-off pixels in a straight drift without spinning", () => {
+    const game = new Game(960, 540)
+    game.toggleMode()
+    game.state.enemies = []
+    game.state.debris = [
+      {
+        position: { x: 100, y: 200 },
+        velocity: { x: 40, y: -20 },
+        rotation: Math.PI / 4,
+        angularVelocity: 8,
+        color: "red",
+        size: 13,
+        ageSeconds: 0,
+        lifetimeSeconds: 1.4,
+      },
+    ]
+
+    game.update(noInput, 0.5)
+
+    expect(game.state.debris[0].position).toEqual({ x: 120, y: 190 })
+    expect(game.state.debris[0].velocity).toEqual({ x: 40, y: -20 })
+    expect(game.state.debris[0].rotation).toBe(Math.PI / 4)
+  })
+})
+
 describe("impact-localized damage", () => {
   it("removes pixels closest to the impact point in the ship's local grid", () => {
     const ship = createShip(100, 50, Math.PI / 2, [
