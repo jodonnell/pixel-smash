@@ -48,14 +48,22 @@ describe("ramming damage", () => {
     reverse: false,
   }
 
-  const createEnemy = (pixels: EnemyShip["pixels"]): EnemyShip => ({
-    position: { x: 480, y: 270 },
-    velocity: { x: 0, y: 0 },
-    rotation: 0,
-    angularVelocity: 0,
-    pixels,
-    stats: calculateShipStats(pixels),
-  })
+  const createEnemy = (pixels: EnemyShip["pixels"]): EnemyShip => {
+    const activeEnemyPixels = pixels.map((pixel) =>
+      pixel.gridX === 0 && pixel.gridY === 0
+        ? { ...pixel, color: "white" as const }
+        : pixel,
+    )
+
+    return {
+      position: { x: 480, y: 270 },
+      velocity: { x: 0, y: 0 },
+      rotation: 0,
+      angularVelocity: 0,
+      pixels: activeEnemyPixels,
+      stats: calculateShipStats(activeEnemyPixels),
+    }
+  }
 
   it("does not damage either ship below the minimum impact speed", () => {
     const game = new Game(960, 540)
@@ -197,7 +205,13 @@ describe("ramming damage", () => {
     ]
     fragileGame.state.ship.velocity = { x: 170, y: 0 }
     fragileGame.state.enemies = [
-      createEnemy([{ gridX: 0, gridY: 0, color: "red" }]),
+      {
+        ...createEnemy([
+          { gridX: 0, gridY: 0, color: "white" },
+          { gridX: 1, gridY: 0, color: "red" },
+        ]),
+        position: { x: 462, y: 270 },
+      },
     ]
 
     const durableGame = new Game(960, 540)
@@ -211,7 +225,13 @@ describe("ramming damage", () => {
     ]
     durableGame.state.ship.velocity = { x: 170, y: 0 }
     durableGame.state.enemies = [
-      createEnemy([{ gridX: 0, gridY: 0, color: "red" }]),
+      {
+        ...createEnemy([
+          { gridX: 0, gridY: 0, color: "white" },
+          { gridX: 1, gridY: 0, color: "red" },
+        ]),
+        position: { x: 462, y: 270 },
+      },
     ]
 
     fragileGame.update(noInput, 0)
@@ -297,8 +317,11 @@ describe("ramming damage", () => {
     blueImpactGame.state.ship.velocity = { x: 170, y: 0 }
     blueImpactGame.state.enemies = [
       {
-        ...createEnemy([{ gridX: 0, gridY: 0, color: "red" }]),
-        position: { x: 498, y: 270 },
+        ...createEnemy([
+          { gridX: 0, gridY: 0, color: "white" },
+          { gridX: 3, gridY: 0, color: "red" },
+        ]),
+        position: { x: 444, y: 270 },
       },
     ]
 
@@ -317,8 +340,11 @@ describe("ramming damage", () => {
     greenImpactGame.state.ship.velocity = { x: 170, y: 0 }
     greenImpactGame.state.enemies = [
       {
-        ...createEnemy([{ gridX: 0, gridY: 0, color: "red" }]),
-        position: { x: 498, y: 270 },
+        ...createEnemy([
+          { gridX: 0, gridY: 0, color: "white" },
+          { gridX: 3, gridY: 0, color: "red" },
+        ]),
+        position: { x: 444, y: 270 },
       },
     ]
 
@@ -344,7 +370,7 @@ describe("enemy ai", () => {
     rotation: number,
   ): EnemyShip => {
     const pixels: EnemyShip["pixels"] = [
-      { gridX: 0, gridY: 0, color: "red" },
+      { gridX: 0, gridY: 0, color: "white" },
       { gridX: 1, gridY: 0, color: "blue" },
     ]
 
@@ -383,6 +409,84 @@ describe("enemy ai", () => {
 
     expect(game.state.enemies[0].velocity.x).toBeLessThan(-90)
     expect(Math.abs(game.state.enemies[0].velocity.y)).toBeLessThan(1)
+  })
+})
+
+describe("enemy cores", () => {
+  const noInput: InputState = {
+    rotateLeft: false,
+    rotateRight: false,
+    thrust: false,
+    reverse: false,
+  }
+
+  it("spawns each enemy with a white core pixel", () => {
+    const game = new Game(960, 540)
+
+    expect(game.state.enemies.length).toBeGreaterThan(0)
+    expect(
+      game.state.enemies.every((enemy) =>
+        enemy.pixels.some(
+          (pixel) =>
+            pixel.gridX === 0 && pixel.gridY === 0 && pixel.color === "white",
+        ),
+      ),
+    ).toBe(true)
+  })
+
+  it("wins once every enemy core has been knocked out", () => {
+    const game = new Game(960, 540)
+    game.toggleMode()
+    game.state.enemies = [
+      {
+        position: { x: 100, y: 100 },
+        velocity: { x: 0, y: 0 },
+        rotation: 0,
+        angularVelocity: 0,
+        pixels: [
+          { gridX: 1, gridY: 0, color: "red" },
+          { gridX: 2, gridY: 0, color: "blue" },
+        ],
+        stats: calculateShipStats([
+          { gridX: 1, gridY: 0, color: "red" },
+          { gridX: 2, gridY: 0, color: "blue" },
+        ]),
+      },
+    ]
+
+    game.update(noInput, 0)
+
+    expect(game.state.outcome).toBe("won")
+  })
+
+  it("ignores coreless enemy remnants for pursuit and collisions", () => {
+    const game = new Game(960, 540)
+    game.toggleMode()
+    game.state.ship.position = { x: 480, y: 270 }
+    game.state.ship.velocity = { x: 220, y: 0 }
+    game.state.enemies = [
+      {
+        position: { x: 480, y: 270 },
+        velocity: { x: 0, y: 0 },
+        rotation: 0,
+        angularVelocity: 0,
+        pixels: [
+          { gridX: 0, gridY: 0, color: "red" },
+          { gridX: 1, gridY: 0, color: "blue" },
+        ],
+        stats: calculateShipStats([
+          { gridX: 0, gridY: 0, color: "red" },
+          { gridX: 1, gridY: 0, color: "blue" },
+        ]),
+      },
+    ]
+
+    game.update(noInput, 0.5)
+
+    expect(game.state.ship.pixels).toHaveLength(7)
+    expect(game.state.enemies[0].velocity.x).toBe(0)
+    expect(game.state.enemies[0].position.x).toBe(480)
+    expect(game.state.outcome).toBe("won")
   })
 })
 

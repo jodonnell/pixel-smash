@@ -65,6 +65,9 @@ const isCorePixel = (pixel: ShipPixel): boolean =>
 const hasPlayerCorePixel = (ship: Ship): boolean =>
   ship.pixels.some((pixel) => isCorePixel(pixel) && pixel.color === "white")
 
+const hasEnemyCorePixel = (ship: EnemyShip): boolean =>
+  ship.pixels.some((pixel) => isCorePixel(pixel) && pixel.color === "white")
+
 const getRemainingPixels = (
   ship: Ship,
   pixelToRemove: ShipPixel,
@@ -236,21 +239,21 @@ const createPlayerPixels = () =>
 
 const enemyPixelShapes: readonly (readonly ShipPixel[])[] = [
   [
-    { gridX: 0, gridY: 0, color: "green" },
+    { gridX: 0, gridY: 0, color: "white" },
     { gridX: 1, gridY: 0, color: "red" },
     { gridX: -1, gridY: 0, color: "red" },
     { gridX: 0, gridY: -1, color: "blue" },
     { gridX: 0, gridY: 1, color: "blue" },
   ],
   [
-    { gridX: 0, gridY: 0, color: "blue" },
+    { gridX: 0, gridY: 0, color: "white" },
     { gridX: 1, gridY: 0, color: "green" },
     { gridX: 0, gridY: 1, color: "green" },
     { gridX: -1, gridY: 1, color: "red" },
     { gridX: 1, gridY: -1, color: "red" },
   ],
   [
-    { gridX: 0, gridY: 0, color: "red" },
+    { gridX: 0, gridY: 0, color: "white" },
     { gridX: -1, gridY: 0, color: "blue" },
     { gridX: -2, gridY: 0, color: "green" },
     { gridX: 0, gridY: -1, color: "green" },
@@ -581,7 +584,7 @@ export class Game {
   }
 
   private updateEnemyAi(enemy: EnemyShip, deltaSeconds: number): void {
-    if (enemy.pixels.length <= 1) {
+    if (!hasEnemyCorePixel(enemy)) {
       enemy.velocity.x *= drag
       enemy.velocity.y *= drag
       enemy.rotation += enemy.angularVelocity * deltaSeconds
@@ -709,6 +712,10 @@ export class Game {
     const nextCollisionKeys = new Set<string>()
 
     this.state.enemies.forEach((enemy, enemyIndex) => {
+      if (!hasEnemyCorePixel(enemy)) {
+        return
+      }
+
       const collisions = detectPixelCollisions(
         this.state.ship,
         enemy,
@@ -755,9 +762,7 @@ export class Game {
       return
     }
 
-    const undefeatedEnemies = this.state.enemies.filter(
-      (enemy) => enemy.pixels.length > 1,
-    )
+    const undefeatedEnemies = this.state.enemies.filter(hasEnemyCorePixel)
 
     if (this.state.enemies.length > 0 && undefeatedEnemies.length === 0) {
       this.state.outcome = "won"

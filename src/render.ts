@@ -253,8 +253,11 @@ export class Renderer {
       state.selectedPixelColor[0].toUpperCase() +
       state.selectedPixelColor.slice(1)
     const modeLabel = state.mode === "build" ? "Build Mode" : "Game Mode"
-    const undefeatedEnemyCount = state.enemies.filter(
-      (enemy) => enemy.pixels.length > 1,
+    const undefeatedEnemyCount = state.enemies.filter((enemy) =>
+      enemy.pixels.some(
+        (pixel) =>
+          pixel.gridX === 0 && pixel.gridY === 0 && pixel.color === "white",
+      ),
     ).length
 
     context.save()
