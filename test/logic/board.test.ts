@@ -53,6 +53,27 @@ describe("build mode ship editing", () => {
     })
   })
 
+  it("limits the player ship builder to 16 pixels", () => {
+    const game = new Game(960, 540)
+
+    for (let gridX = 2; gridX <= 10; gridX += 1) {
+      expect(game.tryPlacePixel(gridX, 0)).toBe(true)
+    }
+
+    expect(game.state.ship.pixels).toHaveLength(16)
+    expect(game.tryPlacePixel(11, 0)).toBe(false)
+    expect(game.state.ship.pixels).toHaveLength(16)
+
+    game.setSelectedPixelColor("blue")
+
+    expect(game.tryPlacePixel(10, 0)).toBe(true)
+    expect(game.state.ship.pixels).toContainEqual({
+      gridX: 10,
+      gridY: 0,
+      color: "blue",
+    })
+  })
+
   it("keeps the ship connected when removing pixels", () => {
     const game = new Game(960, 540)
 

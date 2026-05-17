@@ -16,6 +16,7 @@ const reverseAcceleration = 220
 const drag = 0.995
 const maxSpeed = 520
 export const buildGridCellSize = 18
+export const maxPlayerShipPixels = 16
 const enemyCount = 3
 const enemyMinSpeed = 25
 const enemyMaxSpeed = 70
@@ -463,6 +464,10 @@ export class Game {
       existingPixel.color = this.state.selectedPixelColor
       recalculateShipStats(this.state.ship)
       return true
+    }
+
+    if (this.state.ship.pixels.length >= maxPlayerShipPixels) {
+      return false
     }
 
     if (!canPlacePixel(this.state.ship, gridX, gridY)) {

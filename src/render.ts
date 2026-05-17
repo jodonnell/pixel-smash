@@ -1,5 +1,5 @@
 import type { GameState, PixelHighlight, Ship, ShipPixel } from "./types"
-import { buildGridCellSize } from "./game"
+import { buildGridCellSize, maxPlayerShipPixels } from "./game"
 
 const pixelSize = buildGridCellSize
 const pixelGap = 2
@@ -287,7 +287,11 @@ export class Renderer {
 
     const statsX = state.width - 210
     context.textAlign = "left"
-    context.fillText(`Ship pixels: ${state.ship.pixels.length}`, statsX, 16)
+    context.fillText(
+      `Ship pixels: ${state.ship.pixels.length}/${maxPlayerShipPixels}`,
+      statsX,
+      16,
+    )
     context.fillText(`Enemies: ${undefeatedEnemyCount}`, statsX, 40)
     context.fillText(
       `Thrust: ${Math.round(state.ship.stats.thrustPower)}`,
