@@ -8,6 +8,8 @@ const trackedKeys = new Set([
   "Tab",
   "r",
   "R",
+  "p",
+  "P",
   "1",
   "2",
   "3",
@@ -20,6 +22,7 @@ export class KeyboardInput {
     private readonly onToggleMode: () => void,
     private readonly onSelectPixelColor: (color: PixelColor) => void,
     private readonly onRestart: () => void,
+    private readonly onTogglePause: () => void,
   ) {
     window.addEventListener("keydown", this.handleKeyDown)
     window.addEventListener("keyup", this.handleKeyUp)
@@ -57,6 +60,14 @@ export class KeyboardInput {
     if (event.key.toLowerCase() === "r") {
       if (!event.repeat) {
         this.onRestart()
+      }
+
+      return
+    }
+
+    if (event.key.toLowerCase() === "p") {
+      if (!event.repeat) {
+        this.onTogglePause()
       }
 
       return

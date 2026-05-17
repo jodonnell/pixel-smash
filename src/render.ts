@@ -5,9 +5,9 @@ const pixelSize = buildGridCellSize
 const pixelGap = 2
 
 const pixelColors = {
-  red: "#f05252",
-  green: "#44c76b",
-  blue: "#4b8dff",
+  red: "#ff4d5e",
+  green: "#35e06f",
+  blue: "#4f9bff",
 } as const
 
 export class Renderer {
@@ -15,6 +15,7 @@ export class Renderer {
 
   render(state: GameState): void {
     this.clear(state.width, state.height)
+    this.drawBackground(state.width, state.height)
 
     this.context.save()
     this.applyScreenShake(state)
@@ -40,13 +41,41 @@ export class Renderer {
       }
     }
 
-    this.drawStatus(state)
+    this.drawDebris(state)
+    this.drawParticles(state)
     this.context.restore()
+
+    this.drawStatus(state)
+
+    if (state.paused) {
+      this.drawPauseOverlay(state.width, state.height)
+    }
   }
 
   private clear(width: number, height: number): void {
-    this.context.fillStyle = "black"
+    this.context.fillStyle = "#05070d"
     this.context.fillRect(0, 0, width, height)
+  }
+
+  private drawBackground(width: number, height: number): void {
+    const { context } = this
+    const gradient = context.createLinearGradient(0, 0, width, height)
+
+    gradient.addColorStop(0, "#101827")
+    gradient.addColorStop(0.55, "#07111f")
+    gradient.addColorStop(1, "#03050a")
+
+    context.save()
+    context.fillStyle = gradient
+    context.fillRect(0, 0, width, height)
+
+    context.fillStyle = "rgba(255, 255, 255, 0.18)"
+    for (let y = 24; y < height; y += 73) {
+      for (let x = 36; x < width; x += 89) {
+        context.fillRect(x, y, 2, 2)
+      }
+    }
+    context.restore()
   }
 
   private applyScreenShake(state: GameState): void {
@@ -72,7 +101,7 @@ export class Renderer {
     const centerY = height / 2
 
     context.save()
-    context.strokeStyle = "#263041"
+    context.strokeStyle = "#22334a"
     context.lineWidth = 1
 
     for (let x = centerX % pixelSize; x <= width; x += pixelSize) {
@@ -89,7 +118,7 @@ export class Renderer {
       context.stroke()
     }
 
-    context.strokeStyle = "#42516d"
+    context.strokeStyle = "#5b7196"
     context.beginPath()
     context.moveTo(centerX, 0)
     context.lineTo(centerX, height)
@@ -110,26 +139,69 @@ export class Renderer {
       const x = pixel.gridX * pixelSize - pixelSize / 2
       const y = pixel.gridY * pixelSize - pixelSize / 2
 
+      const drawX = x + pixelGap / 2
+      const drawY = y + pixelGap / 2
+      const drawSize = pixelSize - pixelGap
+
+      context.fillStyle = "rgba(0, 0, 0, 0.45)"
+      context.fillRect(drawX + 2, drawY + 2, drawSize, drawSize)
       context.fillStyle = pixelColors[pixel.color]
-      context.fillRect(
-        x + pixelGap / 2,
-        y + pixelGap / 2,
-        pixelSize - pixelGap,
-        pixelSize - pixelGap,
-      )
+      context.fillRect(drawX, drawY, drawSize, drawSize)
+      context.strokeStyle = "#020617"
+      context.lineWidth = 2
+      context.strokeRect(drawX, drawY, drawSize, drawSize)
 
       if (this.isPixelHighlighted(pixel, highlights)) {
         context.strokeStyle = "#fff7a8"
-        context.lineWidth = 3
-        context.strokeRect(
-          x + pixelGap / 2,
-          y + pixelGap / 2,
-          pixelSize - pixelGap,
-          pixelSize - pixelGap,
-        )
+        context.lineWidth = 4
+        context.strokeRect(drawX - 1, drawY - 1, drawSize + 2, drawSize + 2)
       }
     }
 
+    context.restore()
+  }
+
+  private drawDebris(state: GameState): void {
+    const { context } = this
+
+    context.save()
+    for (const debris of state.debris) {
+      const alpha = 1 - debris.ageSeconds / debris.lifetimeSeconds
+      const halfSize = debris.size / 2
+
+      context.save()
+      context.globalAlpha = Math.max(0, alpha)
+      context.translate(debris.position.x, debris.position.y)
+      context.rotate(debris.rotation)
+      context.fillStyle = pixelColors[debris.color]
+      context.fillRect(-halfSize, -halfSize, debris.size, debris.size)
+      context.strokeStyle = "#020617"
+      context.lineWidth = 2
+      context.strokeRect(-halfSize, -halfSize, debris.size, debris.size)
+      context.restore()
+    }
+    context.restore()
+  }
+
+  private drawParticles(state: GameState): void {
+    const { context } = this
+
+    context.save()
+    for (const particle of state.particles) {
+      const alpha = 1 - particle.ageSeconds / particle.lifetimeSeconds
+
+      context.globalAlpha = Math.max(0, alpha)
+      context.fillStyle = particle.color
+      context.beginPath()
+      context.arc(
+        particle.position.x,
+        particle.position.y,
+        particle.radius,
+        0,
+        Math.PI * 2,
+      )
+      context.fill()
+    }
     context.restore()
   }
 
@@ -154,23 +226,30 @@ export class Renderer {
     ).length
 
     context.save()
-    context.fillStyle = "#e5e7eb"
+    context.fillStyle = "#f8fafc"
     context.font = "16px OpenSans, system-ui, sans-serif"
     context.textBaseline = "top"
-    context.fillText(`${modeLabel} | Tab switch mode | R restart`, 18, 16)
+    context.shadowColor = "rgba(0, 0, 0, 0.9)"
+    context.shadowBlur = 4
+    context.fillText(`${modeLabel} | Tab mode | P pause | R restart`, 18, 16)
 
     if (state.mode === "build") {
       context.fillText(
-        `Build: click place/recolor connected pixels | Right/shift-click remove | Color: ${colorLabel}`,
+        `Click place/recolor connected pixels | Right/shift-click remove | Color: ${colorLabel}`,
         18,
         40,
       )
-      context.fillText("1 Red  2 Green  3 Blue", 18, 64)
+      context.fillText("1 red  2 green  3 blue", 18, 64)
     } else {
       context.fillText(
-        "Controls: arrows rotate/thrust/reverse | Ram enemy ships",
+        "Arrow keys rotate/thrust/reverse | Ram enemy ships to break pixels",
         18,
         40,
+      )
+      context.fillText(
+        "Impacts spawn debris; faster rams do more damage",
+        18,
+        64,
       )
     }
 
@@ -206,6 +285,23 @@ export class Renderer {
       context.fillText(message, state.width / 2, 82)
     }
 
+    context.restore()
+  }
+
+  private drawPauseOverlay(width: number, height: number): void {
+    const { context } = this
+
+    context.save()
+    context.fillStyle = "rgba(2, 6, 23, 0.55)"
+    context.fillRect(0, 0, width, height)
+    context.textAlign = "center"
+    context.textBaseline = "middle"
+    context.font = "34px OpenSans, system-ui, sans-serif"
+    context.fillStyle = "#f8fafc"
+    context.fillText("PAUSED", width / 2, height / 2 - 18)
+    context.font = "16px OpenSans, system-ui, sans-serif"
+    context.fillStyle = "#cbd5e1"
+    context.fillText("Press P to resume", width / 2, height / 2 + 18)
     context.restore()
   }
 }

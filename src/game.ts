@@ -1,5 +1,5 @@
 import { canPlacePixel, canRemovePixel, getPixelAt } from "./shipConnectivity"
-import { detectPixelCollisions } from "./collision"
+import { detectPixelCollisions, getPixelWorldCenter } from "./collision"
 import { calculateShipStats, recalculateShipStats } from "./shipStats"
 import type {
   EnemyShip,
@@ -30,6 +30,15 @@ const minimumCollisionImpulse = 45
 const maxCollisionImpulse = 360
 const screenShakeDuration = 0.18
 const maxScreenShakeMagnitude = 10
+const particleLifetimeSeconds = 0.35
+const debrisLifetimeSeconds = 1.4
+const maxParticles = 120
+const maxDebris = 80
+
+export type ImpactSound = {
+  impactSpeed: number
+  destroyedPixels: number
+}
 
 type RemovalCandidate = {
   pixel: ShipPixel
@@ -275,7 +284,11 @@ export class Game {
   private readonly activeCollisionKeys = new Set<string>()
   private readonly collisionCooldowns = new Map<number, number>()
 
-  constructor(width: number, height: number) {
+  constructor(
+    width: number,
+    height: number,
+    private readonly onImpactSound?: (impact: ImpactSound) => void,
+  ) {
     this.state = this.createInitialState(width, height)
   }
 
@@ -293,6 +306,7 @@ export class Game {
       height,
       mode: "build",
       outcome: "playing",
+      paused: false,
       selectedPixelColor: "red",
       ship: {
         position: {
@@ -316,6 +330,8 @@ export class Game {
         durationSeconds: screenShakeDuration,
         magnitude: 0,
       },
+      particles: [],
+      debris: [],
     }
   }
 
@@ -323,8 +339,13 @@ export class Game {
     const ship = this.state.ship
     this.recalculateAllShipStats()
 
+    if (this.state.paused) {
+      return
+    }
+
     if (this.state.outcome !== "playing") {
       this.updateScreenShake(deltaSeconds)
+      this.updateEffects(deltaSeconds)
       return
     }
 
@@ -338,11 +359,13 @@ export class Game {
       this.activeCollisionKeys.clear()
       this.collisionCooldowns.clear()
       this.stopScreenShake()
+      this.clearEffects()
       return
     }
 
     this.updateCollisionCooldowns(deltaSeconds)
     this.updateScreenShake(deltaSeconds)
+    this.updateEffects(deltaSeconds)
     this.updateEnemies(deltaSeconds)
 
     if (input.rotateLeft) {
@@ -379,7 +402,7 @@ export class Game {
   }
 
   toggleMode(): void {
-    if (this.state.outcome !== "playing") {
+    if (this.state.outcome !== "playing" || this.state.paused) {
       return
     }
 
@@ -397,11 +420,20 @@ export class Game {
       this.activeCollisionKeys.clear()
       this.collisionCooldowns.clear()
       this.stopScreenShake()
+      this.clearEffects()
     }
   }
 
-  setSelectedPixelColor(color: PixelColor): void {
+  togglePause(): void {
     if (this.state.outcome !== "playing") {
+      return
+    }
+
+    this.state.paused = !this.state.paused
+  }
+
+  setSelectedPixelColor(color: PixelColor): void {
+    if (this.state.outcome !== "playing" || this.state.paused) {
       return
     }
 
@@ -409,7 +441,7 @@ export class Game {
   }
 
   tryPlacePixel(gridX: number, gridY: number): boolean {
-    if (this.state.mode !== "build") {
+    if (this.state.mode !== "build" || this.state.paused) {
       return false
     }
 
@@ -436,7 +468,7 @@ export class Game {
   }
 
   tryRemovePixel(gridX: number, gridY: number): boolean {
-    if (this.state.mode !== "build") {
+    if (this.state.mode !== "build" || this.state.paused) {
       return false
     }
 
@@ -505,6 +537,44 @@ export class Game {
     if (this.state.screenShake.remainingSeconds === 0) {
       this.state.screenShake.magnitude = 0
     }
+  }
+
+  private updateEffects(deltaSeconds: number): void {
+    this.state.particles = this.state.particles
+      .map((particle) => ({
+        ...particle,
+        ageSeconds: particle.ageSeconds + deltaSeconds,
+        position: {
+          x: particle.position.x + particle.velocity.x * deltaSeconds,
+          y: particle.position.y + particle.velocity.y * deltaSeconds,
+        },
+        velocity: {
+          x: particle.velocity.x * 0.9,
+          y: particle.velocity.y * 0.9,
+        },
+      }))
+      .filter((particle) => particle.ageSeconds < particle.lifetimeSeconds)
+
+    this.state.debris = this.state.debris
+      .map((debris) => ({
+        ...debris,
+        ageSeconds: debris.ageSeconds + deltaSeconds,
+        position: {
+          x: debris.position.x + debris.velocity.x * deltaSeconds,
+          y: debris.position.y + debris.velocity.y * deltaSeconds,
+        },
+        velocity: {
+          x: debris.velocity.x * 0.985,
+          y: debris.velocity.y * 0.985,
+        },
+        rotation: debris.rotation + debris.angularVelocity * deltaSeconds,
+      }))
+      .filter((debris) => debris.ageSeconds < debris.lifetimeSeconds)
+  }
+
+  private clearEffects(): void {
+    this.state.particles = []
+    this.state.debris = []
   }
 
   private updatePixelCollisions(deltaSeconds: number): void {
@@ -629,9 +699,31 @@ export class Game {
 
     this.highlightDestroyedPixels("player", undefined, destroyedPlayerPixels)
     this.highlightDestroyedPixels("enemy", enemyIndex, destroyedEnemyPixels)
+    this.spawnDestroyedPixelEffects(
+      this.state.ship,
+      destroyedPlayerPixels,
+      worldImpactPoint,
+      impactSpeed,
+    )
+    this.spawnDestroyedPixelEffects(
+      enemy,
+      destroyedEnemyPixels,
+      worldImpactPoint,
+      impactSpeed,
+    )
     recalculateShipStats(this.state.ship)
     recalculateShipStats(enemy)
-    return destroyedPlayerPixels.length > 0 || destroyedEnemyPixels.length > 0
+    const destroyedPixelCount =
+      destroyedPlayerPixels.length + destroyedEnemyPixels.length
+
+    if (destroyedPixelCount > 0) {
+      this.onImpactSound?.({
+        impactSpeed,
+        destroyedPixels: destroyedPixelCount,
+      })
+    }
+
+    return destroyedPixelCount > 0
   }
 
   private getOutgoingRammingDamage(
@@ -812,6 +904,73 @@ export class Game {
     }
 
     return 5 + Math.floor((impactSpeed - 300) / 120)
+  }
+
+  private spawnDestroyedPixelEffects(
+    ship: Ship,
+    pixels: readonly ShipPixel[],
+    impactPoint: { x: number; y: number },
+    impactSpeed: number,
+  ): void {
+    for (const pixel of pixels) {
+      const center = getPixelWorldCenter(ship, pixel, buildGridCellSize)
+      const awayFromImpact = this.normalizeVector(
+        {
+          x: center.x - impactPoint.x,
+          y: center.y - impactPoint.y,
+        },
+        () => {
+          const angle = randomBetween(0, Math.PI * 2)
+          return {
+            x: Math.cos(angle),
+            y: Math.sin(angle),
+          }
+        },
+      )
+      const debrisSpeed = randomBetween(70, 140) + impactSpeed * 0.25
+
+      this.state.debris.push({
+        position: center,
+        velocity: {
+          x: awayFromImpact.x * debrisSpeed + randomBetween(-45, 45),
+          y: awayFromImpact.y * debrisSpeed + randomBetween(-45, 45),
+        },
+        rotation: randomBetween(0, Math.PI * 2),
+        angularVelocity: randomBetween(-8, 8),
+        color: pixel.color,
+        size: buildGridCellSize - 5,
+        ageSeconds: 0,
+        lifetimeSeconds: debrisLifetimeSeconds,
+      })
+
+      for (let index = 0; index < 6; index += 1) {
+        const angle = randomBetween(0, Math.PI * 2)
+        const speed = randomBetween(45, 180) + impactSpeed * 0.15
+
+        this.state.particles.push({
+          position: { ...center },
+          velocity: {
+            x: Math.cos(angle) * speed,
+            y: Math.sin(angle) * speed,
+          },
+          color: index % 2 === 0 ? "#fff7a8" : "#f97316",
+          radius: randomBetween(1.4, 3.4),
+          ageSeconds: 0,
+          lifetimeSeconds: randomBetween(
+            particleLifetimeSeconds * 0.65,
+            particleLifetimeSeconds,
+          ),
+        })
+      }
+    }
+
+    if (this.state.particles.length > maxParticles) {
+      this.state.particles = this.state.particles.slice(-maxParticles)
+    }
+
+    if (this.state.debris.length > maxDebris) {
+      this.state.debris = this.state.debris.slice(-maxDebris)
+    }
   }
 
   private recalculateAllShipStats(): void {

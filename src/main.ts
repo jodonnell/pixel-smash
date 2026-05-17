@@ -2,6 +2,7 @@ import "../style.css"
 import { Game } from "./game"
 import { KeyboardInput } from "./input"
 import { Renderer } from "./render"
+import { SoundEffects } from "./sound"
 
 const canvasWidth = 960
 const canvasHeight = 540
@@ -21,11 +22,15 @@ if (context === null) {
   throw new Error("Canvas 2D rendering is not supported.")
 }
 
-const game = new Game(canvasWidth, canvasHeight)
+const soundEffects = new SoundEffects()
+const game = new Game(canvasWidth, canvasHeight, (impact) =>
+  soundEffects.playImpact(impact),
+)
 const input = new KeyboardInput(
   () => game.toggleMode(),
   (color) => game.setSelectedPixelColor(color),
   () => game.restart(),
+  () => game.togglePause(),
 )
 const renderer = new Renderer(context)
 

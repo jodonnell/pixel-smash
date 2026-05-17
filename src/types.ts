@@ -43,6 +43,26 @@ export type ScreenShake = {
   magnitude: number
 }
 
+export type ImpactParticle = {
+  position: Vector2
+  velocity: Vector2
+  color: string
+  radius: number
+  ageSeconds: number
+  lifetimeSeconds: number
+}
+
+export type DebrisPixel = {
+  position: Vector2
+  velocity: Vector2
+  rotation: number
+  angularVelocity: number
+  color: PixelColor
+  size: number
+  ageSeconds: number
+  lifetimeSeconds: number
+}
+
 export type Ship = {
   position: Vector2
   velocity: Vector2
@@ -60,11 +80,14 @@ export type GameState = {
   height: number
   mode: GameMode
   outcome: GameOutcome
+  paused: boolean
   selectedPixelColor: PixelColor
   ship: Ship
   enemies: EnemyShip[]
   pixelHighlights: PixelHighlight[]
   screenShake: ScreenShake
+  particles: ImpactParticle[]
+  debris: DebrisPixel[]
 }
 
 export type InputState = {
