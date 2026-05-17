@@ -85,7 +85,7 @@ describe("ramming damage", () => {
 
     game.update(noInput, 0)
 
-    expect(game.state.ship.pixels).toHaveLength(4)
+    expect(game.state.ship.pixels).toHaveLength(3)
     expect(isShipConnected(game.state.ship)).toBe(true)
     expect(game.state.enemies[0].pixels).toHaveLength(1)
   })
@@ -219,6 +219,114 @@ describe("ramming damage", () => {
 
     expect(durableGame.state.ship.pixels.length).toBeGreaterThan(
       fragileGame.state.ship.pixels.length,
+    )
+  })
+
+  it("doubles outgoing damage when the colliding attacker pixel is red", () => {
+    const blueImpactGame = new Game(960, 540)
+    blueImpactGame.toggleMode()
+    blueImpactGame.state.ship.pixels = [
+      { gridX: 0, gridY: 0, color: "white" },
+      { gridX: 1, gridY: 0, color: "blue" },
+      { gridX: 0, gridY: 1, color: "red" },
+    ]
+    blueImpactGame.state.ship.stats = calculateShipStats(
+      blueImpactGame.state.ship.pixels,
+    )
+    blueImpactGame.state.ship.rotation = 0
+    blueImpactGame.state.ship.velocity = { x: 170, y: 0 }
+    blueImpactGame.state.enemies = [
+      {
+        ...createEnemy([
+          { gridX: 0, gridY: 0, color: "blue" },
+          { gridX: 1, gridY: 0, color: "blue" },
+          { gridX: 2, gridY: 0, color: "blue" },
+          { gridX: 3, gridY: 0, color: "blue" },
+          { gridX: 4, gridY: 0, color: "blue" },
+        ]),
+        position: { x: 498, y: 270 },
+      },
+    ]
+
+    const redImpactGame = new Game(960, 540)
+    redImpactGame.toggleMode()
+    redImpactGame.state.ship.pixels = [
+      { gridX: 0, gridY: 0, color: "white" },
+      { gridX: 1, gridY: 0, color: "red" },
+      { gridX: 0, gridY: 1, color: "blue" },
+    ]
+    redImpactGame.state.ship.stats = calculateShipStats(
+      redImpactGame.state.ship.pixels,
+    )
+    redImpactGame.state.ship.rotation = 0
+    redImpactGame.state.ship.velocity = { x: 170, y: 0 }
+    redImpactGame.state.enemies = [
+      {
+        ...createEnemy([
+          { gridX: 0, gridY: 0, color: "blue" },
+          { gridX: 1, gridY: 0, color: "blue" },
+          { gridX: 2, gridY: 0, color: "blue" },
+          { gridX: 3, gridY: 0, color: "blue" },
+          { gridX: 4, gridY: 0, color: "blue" },
+        ]),
+        position: { x: 498, y: 270 },
+      },
+    ]
+
+    blueImpactGame.update(noInput, 0)
+    redImpactGame.update(noInput, 0)
+
+    expect(redImpactGame.state.enemies[0].pixels.length).toBeLessThan(
+      blueImpactGame.state.enemies[0].pixels.length,
+    )
+  })
+
+  it("halves incoming damage when the colliding defender pixel is green", () => {
+    const blueImpactGame = new Game(960, 540)
+    blueImpactGame.toggleMode()
+    blueImpactGame.state.ship.pixels = [
+      { gridX: 0, gridY: 0, color: "white" },
+      { gridX: 1, gridY: 0, color: "blue" },
+      { gridX: 0, gridY: 1, color: "green" },
+      { gridX: -1, gridY: 0, color: "blue" },
+    ]
+    blueImpactGame.state.ship.stats = calculateShipStats(
+      blueImpactGame.state.ship.pixels,
+    )
+    blueImpactGame.state.ship.rotation = 0
+    blueImpactGame.state.ship.velocity = { x: 170, y: 0 }
+    blueImpactGame.state.enemies = [
+      {
+        ...createEnemy([{ gridX: 0, gridY: 0, color: "red" }]),
+        position: { x: 498, y: 270 },
+      },
+    ]
+
+    const greenImpactGame = new Game(960, 540)
+    greenImpactGame.toggleMode()
+    greenImpactGame.state.ship.pixels = [
+      { gridX: 0, gridY: 0, color: "white" },
+      { gridX: 1, gridY: 0, color: "green" },
+      { gridX: 0, gridY: 1, color: "blue" },
+      { gridX: -1, gridY: 0, color: "blue" },
+    ]
+    greenImpactGame.state.ship.stats = calculateShipStats(
+      greenImpactGame.state.ship.pixels,
+    )
+    greenImpactGame.state.ship.rotation = 0
+    greenImpactGame.state.ship.velocity = { x: 170, y: 0 }
+    greenImpactGame.state.enemies = [
+      {
+        ...createEnemy([{ gridX: 0, gridY: 0, color: "red" }]),
+        position: { x: 498, y: 270 },
+      },
+    ]
+
+    blueImpactGame.update(noInput, 0)
+    greenImpactGame.update(noInput, 0)
+
+    expect(greenImpactGame.state.ship.pixels.length).toBeGreaterThan(
+      blueImpactGame.state.ship.pixels.length,
     )
   })
 })

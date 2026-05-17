@@ -37,6 +37,8 @@ const maxParticles = 120
 const maxDebris = 80
 const coreGridX = 0
 const coreGridY = 0
+const redPixelRammingMultiplier = 2
+const greenPixelDamageMultiplier = 0.5
 
 export type ImpactSound = {
   impactSpeed: number
@@ -687,6 +689,8 @@ export class Game {
       baseDamage,
       this.state.ship,
       enemy,
+      collisions.map((collision) => collision.shipAPixel),
+      collisions.map((collision) => collision.shipBPixel),
     )
 
     if (enemyDamage === 0) {
@@ -697,6 +701,8 @@ export class Game {
       baseDamage * 0.5,
       enemy,
       this.state.ship,
+      collisions.map((collision) => collision.shipBPixel),
+      collisions.map((collision) => collision.shipAPixel),
     )
     const worldImpactPoint = this.getAverageCollisionCenter(
       collisions.map((collision) => ({
@@ -751,27 +757,81 @@ export class Game {
     baseDamage: number,
     attacker: Ship,
     defender: Ship,
+    attackerPixels: readonly ShipPixel[],
+    defenderPixels: readonly ShipPixel[],
   ): number {
-    return this.getRammingDamage(baseDamage, attacker, defender)
+    return this.getRammingDamage(
+      baseDamage,
+      attacker,
+      defender,
+      attackerPixels,
+      defenderPixels,
+    )
   }
 
   private getRammingDamage(
     baseDamage: number,
     attacker: Ship,
     defender: Ship,
+    attackerPixels: readonly ShipPixel[] = [],
+    defenderPixels: readonly ShipPixel[] = [],
   ): number {
     if (baseDamage === 0) {
       return 0
     }
+
+    const attackerPixelMultiplier =
+      this.getAverageRedPixelRammingMultiplier(attackerPixels)
+    const defenderPixelMultiplier =
+      this.getAverageGreenPixelDamageMultiplier(defenderPixels)
 
     return Math.max(
       1,
       Math.ceil(
         baseDamage *
           attacker.stats.rammingPower *
-          (1 - defender.stats.damageResistance),
+          attackerPixelMultiplier *
+          (1 - defender.stats.damageResistance) *
+          defenderPixelMultiplier,
       ),
     )
+  }
+
+  private getAverageRedPixelRammingMultiplier(
+    pixels: readonly ShipPixel[],
+  ): number {
+    return this.getAveragePixelMultiplier(
+      pixels,
+      "red",
+      redPixelRammingMultiplier,
+    )
+  }
+
+  private getAverageGreenPixelDamageMultiplier(
+    pixels: readonly ShipPixel[],
+  ): number {
+    return this.getAveragePixelMultiplier(
+      pixels,
+      "green",
+      greenPixelDamageMultiplier,
+    )
+  }
+
+  private getAveragePixelMultiplier(
+    pixels: readonly ShipPixel[],
+    color: ShipPixel["color"],
+    multiplier: number,
+  ): number {
+    if (pixels.length === 0) {
+      return 1
+    }
+
+    const totalMultiplier = pixels.reduce(
+      (total, pixel) => total + (pixel.color === color ? multiplier : 1),
+      0,
+    )
+
+    return totalMultiplier / pixels.length
   }
 
   private separateShips(enemy: EnemyShip, collisions: PixelCollision[]): void {
