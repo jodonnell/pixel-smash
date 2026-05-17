@@ -1,4 +1,9 @@
-import type { GameState, InputState, PixelColor, ShipPixel } from "./types"
+import {
+  canPlacePixel,
+  canRemovePixel,
+  getPixelAt,
+} from "./shipConnectivity"
+import type { GameState, InputState, PixelColor } from "./types"
 
 const rotationSpeed = Math.PI * 2.2
 const thrustAcceleration = 360
@@ -107,14 +112,14 @@ export class Game {
       return false
     }
 
-    const existingPixel = this.findPixel(gridX, gridY)
+    const existingPixel = getPixelAt(this.state.ship, gridX, gridY)
 
     if (existingPixel !== undefined) {
       existingPixel.color = this.state.selectedPixelColor
       return true
     }
 
-    if (!this.hasOrthogonalNeighbor(gridX, gridY)) {
+    if (!canPlacePixel(this.state.ship, gridX, gridY)) {
       return false
     }
 
@@ -128,27 +133,17 @@ export class Game {
   }
 
   tryRemovePixel(gridX: number, gridY: number): boolean {
-    if (this.state.mode !== "build" || this.state.ship.pixels.length === 1) {
+    if (this.state.mode !== "build") {
       return false
     }
 
-    const pixelIndex = this.state.ship.pixels.findIndex(
-      (pixel) => pixel.gridX === gridX && pixel.gridY === gridY,
+    if (!canRemovePixel(this.state.ship, gridX, gridY)) {
+      return false
+    }
+
+    this.state.ship.pixels = this.state.ship.pixels.filter(
+      (pixel) => pixel.gridX !== gridX || pixel.gridY !== gridY,
     )
-
-    if (pixelIndex === -1) {
-      return false
-    }
-
-    const remainingPixels = this.state.ship.pixels.filter(
-      (_, index) => index !== pixelIndex,
-    )
-
-    if (!this.arePixelsConnected(remainingPixels)) {
-      return false
-    }
-
-    this.state.ship.pixels = remainingPixels
     return true
   }
 
@@ -186,63 +181,5 @@ export class Game {
     } else if (ship.position.y >= height) {
       ship.position.y -= height
     }
-  }
-
-  private findPixel(gridX: number, gridY: number): ShipPixel | undefined {
-    return this.state.ship.pixels.find(
-      (pixel) => pixel.gridX === gridX && pixel.gridY === gridY,
-    )
-  }
-
-  private hasOrthogonalNeighbor(gridX: number, gridY: number): boolean {
-    return this.state.ship.pixels.some(
-      (pixel) =>
-        Math.abs(pixel.gridX - gridX) + Math.abs(pixel.gridY - gridY) === 1,
-    )
-  }
-
-  private arePixelsConnected(pixels: ShipPixel[]): boolean {
-    if (pixels.length === 0) {
-      return false
-    }
-
-    const remainingKeys = new Set(
-      pixels.map((pixel) => this.getPixelKey(pixel.gridX, pixel.gridY)),
-    )
-    const queuedPixels = [pixels[0]]
-
-    remainingKeys.delete(this.getPixelKey(pixels[0].gridX, pixels[0].gridY))
-
-    while (queuedPixels.length > 0) {
-      const pixel = queuedPixels.pop()
-
-      if (pixel === undefined) {
-        continue
-      }
-
-      const neighborCoordinates = [
-        [pixel.gridX + 1, pixel.gridY],
-        [pixel.gridX - 1, pixel.gridY],
-        [pixel.gridX, pixel.gridY + 1],
-        [pixel.gridX, pixel.gridY - 1],
-      ] as const
-
-      for (const [neighborX, neighborY] of neighborCoordinates) {
-        const neighborKey = this.getPixelKey(neighborX, neighborY)
-
-        if (!remainingKeys.has(neighborKey)) {
-          continue
-        }
-
-        remainingKeys.delete(neighborKey)
-        queuedPixels.push({ gridX: neighborX, gridY: neighborY, color: "red" })
-      }
-    }
-
-    return remainingKeys.size === 0
-  }
-
-  private getPixelKey(gridX: number, gridY: number): string {
-    return `${gridX},${gridY}`
   }
 }
