@@ -13,6 +13,22 @@ export type ShipPixel = {
   color: PixelColor
 }
 
+export type PixelCollision = {
+  shipAPixel: ShipPixel
+  shipBPixel: ShipPixel
+  shipACenter: Vector2
+  shipBCenter: Vector2
+  distance: number
+}
+
+export type PixelHighlight = {
+  ship: "player" | "enemy"
+  enemyIndex?: number
+  gridX: number
+  gridY: number
+  remainingSeconds: number
+}
+
 export type Ship = {
   position: Vector2
   velocity: Vector2
@@ -31,6 +47,7 @@ export type GameState = {
   selectedPixelColor: PixelColor
   ship: Ship
   enemies: EnemyShip[]
+  pixelHighlights: PixelHighlight[]
 }
 
 export type InputState = {

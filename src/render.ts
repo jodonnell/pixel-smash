@@ -1,4 +1,4 @@
-import type { GameState, Ship } from "./types"
+import type { GameState, PixelHighlight, Ship, ShipPixel } from "./types"
 import { buildGridCellSize } from "./game"
 
 const pixelSize = buildGridCellSize
@@ -20,11 +20,20 @@ export class Renderer {
       this.drawBuildGrid(state.width, state.height)
     }
 
-    this.drawShip(state.ship)
+    this.drawShip(
+      state.ship,
+      state.pixelHighlights.filter((highlight) => highlight.ship === "player"),
+    )
 
     if (state.mode === "game") {
-      for (const enemy of state.enemies) {
-        this.drawShip(enemy)
+      for (const [enemyIndex, enemy] of state.enemies.entries()) {
+        this.drawShip(
+          enemy,
+          state.pixelHighlights.filter(
+            (highlight) =>
+              highlight.ship === "enemy" && highlight.enemyIndex === enemyIndex,
+          ),
+        )
       }
     }
 
@@ -77,7 +86,7 @@ export class Renderer {
     context.restore()
   }
 
-  private drawShip(ship: Ship): void {
+  private drawShip(ship: Ship, highlights: PixelHighlight[]): void {
     const { context } = this
 
     context.save()
@@ -95,9 +104,30 @@ export class Renderer {
         pixelSize - pixelGap,
         pixelSize - pixelGap,
       )
+
+      if (this.isPixelHighlighted(pixel, highlights)) {
+        context.strokeStyle = "#fff7a8"
+        context.lineWidth = 3
+        context.strokeRect(
+          x + pixelGap / 2,
+          y + pixelGap / 2,
+          pixelSize - pixelGap,
+          pixelSize - pixelGap,
+        )
+      }
     }
 
     context.restore()
+  }
+
+  private isPixelHighlighted(
+    pixel: ShipPixel,
+    highlights: PixelHighlight[],
+  ): boolean {
+    return highlights.some(
+      (highlight) =>
+        highlight.gridX === pixel.gridX && highlight.gridY === pixel.gridY,
+    )
   }
 
   private drawStatus(state: GameState): void {

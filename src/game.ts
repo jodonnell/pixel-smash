@@ -3,10 +3,12 @@ import {
   canRemovePixel,
   getPixelAt,
 } from "./shipConnectivity"
+import { detectPixelCollisions } from "./collision"
 import type {
   EnemyShip,
   GameState,
   InputState,
+  PixelCollision,
   PixelColor,
   Ship,
   ShipPixel,
@@ -23,6 +25,7 @@ const enemyMinSpeed = 25
 const enemyMaxSpeed = 70
 const enemyMinSpin = 0.25
 const enemyMaxSpin = 0.7
+const collisionHighlightDuration = 0.2
 
 const createPlayerPixels = () => [
   { gridX: 0, gridY: 0, color: "green" },
@@ -87,6 +90,7 @@ const createEnemyShip = (width: number, height: number, index: number): EnemyShi
 
 export class Game {
   readonly state: GameState
+  private readonly activeCollisionKeys = new Set<string>()
 
   constructor(width: number, height: number) {
     this.state = {
@@ -109,6 +113,7 @@ export class Game {
       enemies: Array.from({ length: enemyCount }, (_, index) =>
         createEnemyShip(width, height, index),
       ),
+      pixelHighlights: [],
     }
   }
 
@@ -121,6 +126,8 @@ export class Game {
       ship.velocity.x = 0
       ship.velocity.y = 0
       ship.rotation = 0
+      this.state.pixelHighlights = []
+      this.activeCollisionKeys.clear()
       return
     }
 
@@ -155,6 +162,7 @@ export class Game {
     ship.position.y += ship.velocity.y * deltaSeconds
 
     this.wrapShip(ship)
+    this.updatePixelCollisions(deltaSeconds)
   }
 
   toggleMode(): void {
@@ -168,6 +176,8 @@ export class Game {
       ship.velocity.x = 0
       ship.velocity.y = 0
       ship.rotation = 0
+      this.state.pixelHighlights = []
+      this.activeCollisionKeys.clear()
     }
   }
 
@@ -242,6 +252,91 @@ export class Game {
       enemy.rotation += enemy.angularVelocity * deltaSeconds
       this.wrapShip(enemy)
     }
+  }
+
+  private updatePixelCollisions(deltaSeconds: number): void {
+    this.state.pixelHighlights = this.state.pixelHighlights
+      .map((highlight) => ({
+        ...highlight,
+        remainingSeconds: highlight.remainingSeconds - deltaSeconds,
+      }))
+      .filter((highlight) => highlight.remainingSeconds > 0)
+
+    const nextCollisionKeys = new Set<string>()
+
+    this.state.enemies.forEach((enemy, enemyIndex) => {
+      const collisions = detectPixelCollisions(
+        this.state.ship,
+        enemy,
+        buildGridCellSize,
+      )
+
+      for (const collision of collisions) {
+        const key = this.getCollisionKey(enemyIndex, collision)
+        nextCollisionKeys.add(key)
+        this.highlightCollision(enemyIndex, collision)
+
+        if (!this.activeCollisionKeys.has(key)) {
+          this.logCollision(enemyIndex, collision)
+        }
+      }
+    })
+
+    this.activeCollisionKeys.clear()
+    for (const key of nextCollisionKeys) {
+      this.activeCollisionKeys.add(key)
+    }
+  }
+
+  private highlightCollision(
+    enemyIndex: number,
+    { shipAPixel, shipBPixel }: PixelCollision,
+  ): void {
+    this.state.pixelHighlights.push(
+      {
+        ship: "player",
+        gridX: shipAPixel.gridX,
+        gridY: shipAPixel.gridY,
+        remainingSeconds: collisionHighlightDuration,
+      },
+      {
+        ship: "enemy",
+        enemyIndex,
+        gridX: shipBPixel.gridX,
+        gridY: shipBPixel.gridY,
+        remainingSeconds: collisionHighlightDuration,
+      },
+    )
+  }
+
+  private logCollision(enemyIndex: number, collision: PixelCollision): void {
+    console.log("Pixel collision", {
+      enemyIndex,
+      playerPixel: {
+        gridX: collision.shipAPixel.gridX,
+        gridY: collision.shipAPixel.gridY,
+        color: collision.shipAPixel.color,
+      },
+      enemyPixel: {
+        gridX: collision.shipBPixel.gridX,
+        gridY: collision.shipBPixel.gridY,
+        color: collision.shipBPixel.color,
+      },
+      distance: Number(collision.distance.toFixed(2)),
+    })
+  }
+
+  private getCollisionKey(
+    enemyIndex: number,
+    { shipAPixel, shipBPixel }: PixelCollision,
+  ): string {
+    return [
+      enemyIndex,
+      shipAPixel.gridX,
+      shipAPixel.gridY,
+      shipBPixel.gridX,
+      shipBPixel.gridY,
+    ].join(":")
   }
 
   private wrapShip(ship: Ship): void {
