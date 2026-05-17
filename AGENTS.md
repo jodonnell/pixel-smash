@@ -1,0 +1,3 @@
+Build a 2D pixel-ship combat prototype.
+
+The player has a ship made of colored grid pixels. In Build Mode, the player places red, blue, and green pixels on a grid. Every placed pixel must be connected orthogonally to the existing ship. In Game Mode, the ship moves in one screen like Asteroids: arrow keys rotate/thrust, the ship has momentum, and it can ram enemy pixel-ships. On collision, pixels are knocked off both ships. Higher collision speed causes more pixel destruction.
