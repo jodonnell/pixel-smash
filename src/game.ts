@@ -3,10 +3,10 @@ import { detectPixelCollisions, getPixelWorldCenter } from "./collision"
 import { calculateShipStats, recalculateShipStats } from "./shipStats"
 import type {
   EnemyShip,
+  BuildPixelColor,
   GameState,
   InputState,
   PixelCollision,
-  PixelColor,
   Ship,
   ShipPixel,
 } from "./types"
@@ -34,6 +34,8 @@ const particleLifetimeSeconds = 0.35
 const debrisLifetimeSeconds = 1.4
 const maxParticles = 120
 const maxDebris = 80
+const coreGridX = 0
+const coreGridY = 0
 
 export type ImpactSound = {
   impactSpeed: number
@@ -50,6 +52,12 @@ type RemovalCandidate = {
 
 const getPixelKey = (pixel: ShipPixel): string =>
   `${pixel.gridX}:${pixel.gridY}`
+
+const isCorePixel = (pixel: ShipPixel): boolean =>
+  pixel.gridX === coreGridX && pixel.gridY === coreGridY
+
+const hasPlayerCorePixel = (ship: Ship): boolean =>
+  ship.pixels.some((pixel) => isCorePixel(pixel) && pixel.color === "white")
 
 const getRemainingPixels = (
   ship: Ship,
@@ -211,7 +219,7 @@ export const removePixelsNearImpact = (
 
 const createPlayerPixels = () =>
   [
-    { gridX: 0, gridY: 0, color: "green" },
+    { gridX: 0, gridY: 0, color: "white" },
     { gridX: 1, gridY: 0, color: "red" },
     { gridX: -1, gridY: 0, color: "blue" },
     { gridX: 0, gridY: -1, color: "blue" },
@@ -432,7 +440,7 @@ export class Game {
     this.state.paused = !this.state.paused
   }
 
-  setSelectedPixelColor(color: PixelColor): void {
+  setSelectedPixelColor(color: BuildPixelColor): void {
     if (this.state.outcome !== "playing" || this.state.paused) {
       return
     }
@@ -448,6 +456,10 @@ export class Game {
     const existingPixel = getPixelAt(this.state.ship, gridX, gridY)
 
     if (existingPixel !== undefined) {
+      if (isCorePixel(existingPixel)) {
+        return false
+      }
+
       existingPixel.color = this.state.selectedPixelColor
       recalculateShipStats(this.state.ship)
       return true
@@ -469,6 +481,10 @@ export class Game {
 
   tryRemovePixel(gridX: number, gridY: number): boolean {
     if (this.state.mode !== "build" || this.state.paused) {
+      return false
+    }
+
+    if (gridX === coreGridX && gridY === coreGridY) {
       return false
     }
 
@@ -629,7 +645,7 @@ export class Game {
   }
 
   private updateOutcome(): void {
-    if (this.state.ship.pixels.length <= 1) {
+    if (!hasPlayerCorePixel(this.state.ship)) {
       this.state.outcome = "lost"
       return
     }

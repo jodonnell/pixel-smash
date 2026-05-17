@@ -5,7 +5,7 @@ describe("build mode ship editing", () => {
     const game = new Game(960, 540)
 
     expect(game.state.ship.stats.thrustPower).toBe(360)
-    expect(game.state.ship.stats.damageResistance).toBeCloseTo(0.3)
+    expect(game.state.ship.stats.damageResistance).toBeCloseTo(0.2)
     expect(game.state.ship.stats.rammingPower).toBe(1.4)
 
     game.setSelectedPixelColor("blue")
@@ -19,6 +19,26 @@ describe("build mode ship editing", () => {
 
     expect(game.tryRemovePixel(2, 0)).toBe(true)
     expect(game.state.ship.stats.rammingPower).toBe(1.4)
+  })
+
+  it("keeps the center core white and locked in build mode", () => {
+    const game = new Game(960, 540)
+
+    expect(game.state.ship.pixels).toContainEqual({
+      gridX: 0,
+      gridY: 0,
+      color: "white",
+    })
+
+    game.setSelectedPixelColor("red")
+
+    expect(game.tryPlacePixel(0, 0)).toBe(false)
+    expect(game.tryRemovePixel(0, 0)).toBe(false)
+    expect(game.state.ship.pixels).toContainEqual({
+      gridX: 0,
+      gridY: 0,
+      color: "white",
+    })
   })
 
   it("only places new pixels next to the ship", () => {
@@ -102,9 +122,22 @@ describe("build mode ship editing", () => {
     )
   })
 
-  it("loses when the player ship is reduced to one pixel", () => {
+  it("keeps playing when only the white core remains", () => {
     const game = new Game(960, 540)
-    game.state.ship.pixels = [{ gridX: 0, gridY: 0, color: "green" }]
+    game.state.ship.pixels = [{ gridX: 0, gridY: 0, color: "white" }]
+    game.toggleMode()
+
+    game.update(
+      { rotateLeft: false, rotateRight: false, thrust: false, reverse: false },
+      0,
+    )
+
+    expect(game.state.outcome).toBe("playing")
+  })
+
+  it("loses when the white core pixel is destroyed", () => {
+    const game = new Game(960, 540)
+    game.state.ship.pixels = [{ gridX: 1, gridY: 0, color: "green" }]
     game.toggleMode()
 
     game.update(

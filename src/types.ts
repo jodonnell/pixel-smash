@@ -3,7 +3,9 @@ export type Vector2 = {
   y: number
 }
 
-export type PixelColor = "red" | "green" | "blue"
+export type BuildPixelColor = "red" | "green" | "blue"
+
+export type PixelColor = BuildPixelColor | "white"
 
 export type GameMode = "build" | "game"
 
@@ -81,7 +83,7 @@ export type GameState = {
   mode: GameMode
   outcome: GameOutcome
   paused: boolean
-  selectedPixelColor: PixelColor
+  selectedPixelColor: BuildPixelColor
   ship: Ship
   enemies: EnemyShip[]
   pixelHighlights: PixelHighlight[]

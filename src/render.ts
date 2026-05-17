@@ -8,6 +8,7 @@ const pixelColors = {
   red: "#ff4d5e",
   green: "#35e06f",
   blue: "#4f9bff",
+  white: "#f8fafc",
 } as const
 
 export class Renderer {
@@ -308,7 +309,7 @@ export class Renderer {
       const message =
         state.outcome === "won"
           ? "You win! Press R to restart."
-          : "Ship destroyed. Press R to restart."
+          : "Core destroyed. Press R to restart."
 
       context.textAlign = "center"
       context.font = "30px OpenSans, system-ui, sans-serif"

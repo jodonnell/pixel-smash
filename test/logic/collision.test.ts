@@ -85,7 +85,7 @@ describe("ramming damage", () => {
 
     game.update(noInput, 0)
 
-    expect(game.state.ship.pixels).toHaveLength(5)
+    expect(game.state.ship.pixels).toHaveLength(4)
     expect(isShipConnected(game.state.ship)).toBe(true)
     expect(game.state.enemies[0].pixels).toHaveLength(1)
   })
